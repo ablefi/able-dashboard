@@ -1,0 +1,121 @@
+/*
+ * Tailwind v4 — set up to COEXIST with Ant Design during the Phase-2
+ * redesign. We deliberately import only `theme` + `utilities` and SKIP
+ * Tailwind's preflight (base reset), because preflight resets base
+ * elements (button, h1, ul…) and would fight Ant Design's own reset
+ * while both libraries are on the page. Once every page is off Antd we
+ * can switch to the full `@import "tailwindcss"` and drop the manual
+ * resets below.
+ */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+/*
+ * Just Pray brand palette — mirrored from creatorops / jp-creators so all
+ * three internal tools feel like one family. Keep in sync if it evolves.
+ */
+@theme inline {
+  --color-jp-blue: #3b82f6;
+  --color-jp-blue-dark: #1e40af;
+  --color-jp-blue-light: #60a5fa;
+  --color-jp-navy: #0b1426;
+  --color-jp-navy-light: #111b33;
+  --color-jp-navy-card: #15203a;
+  --color-jp-cyan: #4fb8e8;
+  --color-jp-teal: #2dd4bf;
+  --color-jp-gold: #f59e0b;
+  --color-jp-purple: #a855f7;
+
+  --color-ink: #f0f4f8;
+  --color-ink-muted: #94a3b8;
+  --color-ink-faint: #64748b;
+
+  --color-rule: rgba(96, 165, 250, 0.12);
+  --color-rule-strong: rgba(96, 165, 250, 0.22);
+
+  --font-sans: var(--font-inter);
+}
+
+/*
+ * Minimal base our Tailwind shell needs (NOT full preflight — see note
+ * above). CRITICAL: these MUST live in @layer base so Tailwind UTILITIES
+ * (@layer utilities, declared after base) win over them. If they were
+ * unlayered they'd beat the utilities and strip bg/border/padding off our
+ * own buttons — which is exactly what made buttons render as plain text.
+ */
+@layer base {
+  .jp-shell, .jp-shell * { box-sizing: border-box; }
+  .jp-shell button { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; }
+  /* Every button in the shell gets a press response, not just the ones using
+     the Button component — several screens still hand-roll their own. */
+  .jp-shell button { transition: transform 120ms ease, background-color 150ms ease, color 150ms ease, border-color 150ms ease, opacity 150ms ease; }
+  .jp-shell button:active:not(:disabled) { transform: scale(0.97); }
+  @media (prefers-reduced-motion: reduce) {
+    .jp-shell button { transition: none; }
+    .jp-shell button:active:not(:disabled) { transform: none; }
+  }
+  .jp-shell a { color: inherit; text-decoration: none; }
+  /* No preflight → strip default list markers/margins inside our shell. */
+  .jp-shell ul, .jp-shell ol { list-style: none; margin: 0; padding: 0; }
+  .jp-shell h1, .jp-shell h2, .jp-shell h3, .jp-shell h4, .jp-shell p { margin: 0; }
+}
+
+/*
+ * Global ~90% scale. Adam wanted the whole admin to feel like it's at 90%
+ * zoom (more breathing room, less "zoomed in"). Tailwind sizing is rem-based,
+ * so shrinking the root font size scales text + spacing together. 16px → 14.4px.
+ */
+html { font-size: 90%; }
+
+/*
+ * Paint the document root + body navy. The shell's bg-jp-navy lives on an inner
+ * div, so without this the page background behind it is the browser default
+ * (white) — which the macOS rubber-band overscroll bounces into view on a hard
+ * scroll. overscroll-behavior: none also stops the whole-page bounce.
+ */
+html, body { background-color: #0b1426; }
+html { overscroll-behavior: none; }
+
+/* Tabular numerals on .num so columns of stats line up. */
+.num { font-variant-numeric: tabular-nums; }
+
+/* Scrollbars tuned to the dark surface. */
+.jp-shell * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(96, 165, 250, 0.18) transparent;
+}
+.jp-shell *::-webkit-scrollbar { width: 10px; height: 10px; }
+.jp-shell *::-webkit-scrollbar-track { background: transparent; }
+.jp-shell *::-webkit-scrollbar-thumb {
+  background: rgba(96, 165, 250, 0.18);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.jp-shell *::-webkit-scrollbar-thumb:hover { background: rgba(96, 165, 250, 0.32); }
+
+/*
+ * .chart-card — thin blue gradient hairline at the top edge + soft lift.
+ */
+.chart-card {
+  position: relative;
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03), 0 12px 32px -16px rgba(0, 0, 0, 0.45);
+  transition: border-color 200ms ease;
+}
+.chart-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(96, 165, 250, 0.45), transparent);
+  pointer-events: none;
+}
+.chart-card:hover { border-color: rgba(96, 165, 250, 0.22); }
+
+/* Staging banner offset: push the fixed sidebar below the 24px "STAGING" bar
+   (toggled by StagingBanner; production never gets this class). */
+.staging-env aside {
+  top: 1.5rem;
+}
