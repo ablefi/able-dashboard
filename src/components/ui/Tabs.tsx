@@ -53,11 +53,11 @@ export default function Tabs({
   }, [measure]);
 
   return (
-    <div ref={wrapRef} className={cn("relative inline-flex gap-1 rounded-xl border border-white/[0.08] bg-jp-navy-card/50", size === "sm" ? "p-1" : "p-1")}>
+    <div ref={wrapRef} className={cn("relative inline-flex gap-1 rounded-xl border border-slate-200 bg-slate-50", size === "sm" ? "p-1" : "p-1")}>
       {box && (
         <span
           aria-hidden
-          className="absolute top-1 bottom-1 rounded-lg bg-jp-blue/15 ring-1 ring-inset ring-jp-blue/20 transition-[left,width] duration-200 ease-out"
+          className="absolute top-1 bottom-1 rounded-lg bg-white shadow-sm ring-1 ring-inset ring-slate-200 transition-[left,width] duration-200 ease-out"
           style={{ left: box.left, width: box.width }}
         />
       )}
@@ -71,7 +71,7 @@ export default function Tabs({
           className={cn(
             "relative z-10 rounded-lg font-medium transition-colors duration-150",
             size === "sm" ? "px-3 py-1 text-xs" : "px-4 py-1.5 text-sm",
-            active === t.key ? "text-jp-blue-light" : "text-ink-muted hover:text-ink"
+            active === t.key ? "text-jp-blue-dark" : "text-ink-muted hover:text-ink"
           )}
         >
           {t.label}

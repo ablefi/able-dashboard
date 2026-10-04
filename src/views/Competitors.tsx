@@ -262,7 +262,7 @@ export default function Competitors() {
                   const comp = competitors.find((c) => c.app_store_id === app.appId);
                   return (
                     <tr key={app.appId} className={isJP ? "bg-jp-blue/[0.08]" : ""}>
-                      <td className={`sticky left-0 z-10 px-5 py-3 ${isJP ? "bg-[#13203d]" : "bg-jp-navy"}`}>
+                      <td className={`sticky left-0 z-10 px-5 py-3 ${isJP ? "bg-emerald-50" : "bg-white"}`}>
                         <div className="flex items-center gap-3">
                           {comp?.app_icon_url || isJP ? (
                             // eslint-disable-next-line @next/next/no-img-element

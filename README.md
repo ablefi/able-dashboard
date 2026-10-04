@@ -3,6 +3,20 @@
 Marketing operations dashboard for Able: creator roster, post tracking, content
 performance, referral codes, user analysis and website analytics.
 
+## Dashboard presentation
+
+White surfaces and black primary controls use Able's orange as a small brand accent.
+The floating bottom navigation keeps the content full-width: Overview, Creators,
+Users, Codes, Finances, Growth, and More. Hover to view a section's pages, click its
+tab to open the default page, or use the keyboard disclosure button to open its menu.
+On touch screens, tap the section to choose a page. Website, Competitors and Prospects
+are grouped under Growth; revenue is under Finances. Existing URLs and creator
+profiles, forms, scraping, and data sources are unchanged.
+
+This project is separate from the static product Ops dashboard in `ablefi/able`.
+Its auth/data setup below still applies; no Ops viewer password or browser-only
+creator drafts are added here.
+
 This is a stripped fork of a working dashboard built for another app. All of
 that app's product features, data and credentials have been removed. What
 remains is the marketing machinery, which is the part that transfers.

@@ -12,59 +12,59 @@ code {
     monospace;
 }
 
-/* Dark mode DatePicker styles */
+/* Light DatePicker styles */
 .dark-datepicker,
 .dark-datepicker input {
-  background: #1a2233 !important;
-  color: #fff !important;
-  border-color: #333 !important;
+  background: #fff !important;
+  color: #17231e !important;
+  border-color: #dce4df !important;
 }
 
 .dark-datepicker-popup .ant-picker-panel,
 .dark-datepicker-popup .ant-picker-time-panel {
-  background: #1a2233 !important;
-  color: #fff !important;
+  background: #fff !important;
+  color: #17231e !important;
 }
 
 .dark-datepicker-popup .ant-picker-cell-inner {
-  color: #fff !important;
+  color: #17231e !important;
 }
 
 .dark-datepicker-popup .ant-picker-cell-in-view.ant-picker-cell-selected .ant-picker-cell-inner,
 .dark-datepicker-popup .ant-picker-cell-in-view.ant-picker-cell-range-start .ant-picker-cell-inner,
 .dark-datepicker-popup .ant-picker-cell-in-view.ant-picker-cell-range-end .ant-picker-cell-inner {
-  background: #4B9AD6 !important;
+  background: #111111 !important;
   color: #fff !important;
 }
 
 .dark-datepicker-popup .ant-picker-header,
 .dark-datepicker-popup .ant-picker-footer {
-  background: #1a2233 !important;
-  color: #fff !important;
+  background: #fff !important;
+  color: #17231e !important;
 }
 
-/* Dark mode styles for Ant Design Alert */
+/* Light styles for Ant Design Alert */
 .ant-alert {
-  background: #1a2233 !important;
-  color: #fff !important;
-  border: 1px solid #333 !important;
+  background: #f6f8f7 !important;
+  color: #17231e !important;
+  border: 1px solid #dce4df !important;
 }
 .ant-alert-message, .ant-alert-description {
-  color: #fff !important;
+  color: #17231e !important;
 }
 .ant-alert-success {
-  background: #193a2f !important;
-  border-color: #237a4b !important;
+  background: #e8f6ee !important;
+  border-color: #9ed4b3 !important;
 }
 .ant-alert-error {
-  background: #331a1a !important;
-  border-color: #a94442 !important;
+  background: #fff0f0 !important;
+  border-color: #e8a5a5 !important;
 }
 .ant-alert-warning {
-  background: #332a1a !important;
-  border-color: #b8860b !important;
+  background: #fff8e8 !important;
+  border-color: #e7c77a !important;
 }
 .ant-alert-info {
-  background: #1a2233 !important;
-  border-color: #4B9AD6 !important;
+  background: #eef7f3 !important;
+  border-color: #9ccfba !important;
 }

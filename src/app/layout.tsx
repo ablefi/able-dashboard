@@ -13,21 +13,17 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Just Pray Admin",
-  description: "Just Pray internal admin dashboard",
+  title: "Able Ops",
+  description: "Able internal operations dashboard",
   // Private admin tool — never index, anywhere (staging or prod).
   robots: { index: false, follow: false, nocache: true, googleBot: { index: false, follow: false } },
   icons: {
-    icon: [
-      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
-      { url: "/favicon-16.png", sizes: "16x16", type: "image/png" },
-    ],
-    apple: "/apple-touch-icon.png",
+    icon: "/able-mark.svg",
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0B1426",
+  themeColor: "#FFFFFF",
 };
 
 /**

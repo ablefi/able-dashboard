@@ -68,7 +68,7 @@ export default function MultiSelect({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex min-h-9 w-full items-center gap-2 rounded-xl border border-white/[0.12] bg-jp-navy-card/60 px-3 py-1.5 text-left text-sm text-ink transition-colors hover:border-white/[0.22]"
+        className="flex min-h-9 w-full items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-left text-sm text-ink transition-colors hover:border-slate-300"
       >
         <span className="flex flex-1 flex-wrap items-center gap-1">
           {value.length === 0 && <span className="text-ink-faint">{placeholder}</span>}

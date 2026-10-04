@@ -40,11 +40,11 @@ interface RevenueResponse {
   latestSnapshotDate: string | null;
 }
 
-const CHART = { grid: "rgba(255,255,255,0.05)", tick: "#8499b3" };
+const CHART = { grid: "rgba(23,35,30,0.08)", tick: "#66756d" };
 const TOOLTIP_STYLE = {
-  contentStyle: { backgroundColor: "#15203a", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "8px" },
-  labelStyle: { color: "#f0f4f8" },
-  itemStyle: { color: "#f0f4f8" },
+  contentStyle: { backgroundColor: "#ffffff", border: "1px solid #dce4df", borderRadius: "8px" },
+  labelStyle: { color: "#17231e" },
+  itemStyle: { color: "#17231e" },
 };
 
 const fmtCur = (n: number) => `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;

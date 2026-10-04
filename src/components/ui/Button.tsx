@@ -19,9 +19,9 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           {
             "bg-jp-blue text-white shadow-md shadow-jp-blue/30 hover:bg-jp-blue-light":
               variant === "primary",
-            "border border-white/[0.12] bg-jp-navy-card/60 text-white hover:border-white/[0.22] hover:bg-jp-navy-card":
+            "border border-slate-200 bg-white text-ink shadow-sm hover:border-slate-300 hover:bg-slate-50":
               variant === "secondary",
-            "text-ink-muted hover:bg-white/[0.04] hover:text-ink": variant === "ghost",
+            "text-ink-muted hover:bg-slate-100 hover:text-ink": variant === "ghost",
             "bg-rose-500/90 text-white shadow-md shadow-rose-500/20 hover:bg-rose-500":
               variant === "danger",
             "bg-amber-600/80 text-amber-50 hover:bg-amber-600/95": variant === "warning",

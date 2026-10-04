@@ -12,27 +12,28 @@
 @import "tailwindcss/utilities.css" layer(utilities);
 
 /*
- * Just Pray brand palette — mirrored from creatorops / jp-creators so all
- * three internal tools feel like one family. Keep in sync if it evolves.
+ * Able Ops light palette. The existing JP-named utility tokens are retained
+ * so the shared dashboard components can be restyled without rewriting pages.
  */
 @theme inline {
-  --color-jp-blue: #3b82f6;
-  --color-jp-blue-dark: #1e40af;
-  --color-jp-blue-light: #60a5fa;
-  --color-jp-navy: #0b1426;
-  --color-jp-navy-light: #111b33;
-  --color-jp-navy-card: #15203a;
-  --color-jp-cyan: #4fb8e8;
-  --color-jp-teal: #2dd4bf;
-  --color-jp-gold: #f59e0b;
-  --color-jp-purple: #a855f7;
+  --color-jp-blue: #111111;
+  --color-jp-blue-dark: #000000;
+  --color-jp-blue-light: #333333;
+  --color-jp-navy: #ffffff;
+  --color-jp-navy-light: #f8f8f6;
+  --color-jp-navy-card: #ffffff;
+  --color-jp-cyan: #0e7490;
+  --color-jp-teal: #0f766e;
+  --color-jp-gold: #a16207;
+  --color-jp-purple: #7c3aed;
 
-  --color-ink: #f0f4f8;
-  --color-ink-muted: #94a3b8;
-  --color-ink-faint: #64748b;
+  --color-ink: #161616;
+  --color-ink-muted: #72716d;
+  --color-ink-faint: #85847e;
+  --color-able-orange: #ff5d2b;
 
-  --color-rule: rgba(96, 165, 250, 0.12);
-  --color-rule-strong: rgba(96, 165, 250, 0.22);
+  --color-rule: rgba(23, 35, 30, 0.10);
+  --color-rule-strong: rgba(23, 35, 30, 0.18);
 
   --font-sans: var(--font-inter);
 }
@@ -69,13 +70,17 @@
 html { font-size: 90%; }
 
 /*
- * Paint the document root + body navy. The shell's bg-jp-navy lives on an inner
- * div, so without this the page background behind it is the browser default
- * (white) — which the macOS rubber-band overscroll bounces into view on a hard
- * scroll. overscroll-behavior: none also stops the whole-page bounce.
+ * Keep the entire viewport white, including overscroll outside the shell.
  */
-html, body { background-color: #0b1426; }
+html, body { background-color: #ffffff; color: #161616; }
 html { overscroll-behavior: none; }
+
+/* Legacy dark utility classes appear across older screens. Give them a
+   consistent light border/hover treatment while those screens are migrated. */
+.jp-shell [class*="border-white/"] { border-color: rgba(23, 35, 30, 0.11); }
+.jp-shell [class*="hover:border-white/"]:hover { border-color: rgba(23, 35, 30, 0.23); }
+.jp-shell [class*="hover:bg-white/"]:hover { background-color: #f2f2ef; }
+.jp-shell [class*="bg-white/"]:not([class*="hover:bg-white/"]) { background-color: #f6f6f3; }
 
 /* Tabular numerals on .num so columns of stats line up. */
 .num { font-variant-numeric: tabular-nums; }
@@ -83,25 +88,25 @@ html { overscroll-behavior: none; }
 /* Scrollbars tuned to the dark surface. */
 .jp-shell * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(96, 165, 250, 0.18) transparent;
+  scrollbar-color: rgba(23, 35, 30, 0.20) transparent;
 }
 .jp-shell *::-webkit-scrollbar { width: 10px; height: 10px; }
 .jp-shell *::-webkit-scrollbar-track { background: transparent; }
 .jp-shell *::-webkit-scrollbar-thumb {
-  background: rgba(96, 165, 250, 0.18);
+  background: rgba(23, 35, 30, 0.20);
   border-radius: 8px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
-.jp-shell *::-webkit-scrollbar-thumb:hover { background: rgba(96, 165, 250, 0.32); }
+.jp-shell *::-webkit-scrollbar-thumb:hover { background: rgba(23, 35, 30, 0.32); }
 
 /*
- * .chart-card — thin blue gradient hairline at the top edge + soft lift.
+ * Shared card treatment: a clear edge and restrained lift on white.
  */
 .chart-card {
   position: relative;
-  border-color: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03), 0 12px 32px -16px rgba(0, 0, 0, 0.45);
+  border-color: rgba(23, 35, 30, 0.10);
+  box-shadow: 0 1px 2px rgba(23, 35, 30, 0.03), 0 12px 28px -20px rgba(23, 35, 30, 0.22);
   transition: border-color 200ms ease;
 }
 .chart-card::before {
@@ -109,13 +114,62 @@ html { overscroll-behavior: none; }
   position: absolute;
   inset: 0 0 auto 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(96, 165, 250, 0.45), transparent);
+  background: linear-gradient(90deg, transparent, rgba(17, 17, 17, 0.20), transparent);
   pointer-events: none;
 }
-.chart-card:hover { border-color: rgba(96, 165, 250, 0.22); }
+.chart-card:hover { border-color: rgba(17, 17, 17, 0.22); }
+.chart-card .text-emerald-400 { color: #047857; }
+.chart-card .text-rose-400 { color: #be123c; }
+.chart-card .text-amber-400 { color: #b45309; }
 
 /* Staging banner offset: push the fixed sidebar below the 24px "STAGING" bar
    (toggled by StagingBanner; production never gets this class). */
 .staging-env aside {
   top: 1.5rem;
 }
+
+.able-topbar {
+  position: sticky; top: 0; z-index: 30; height: 68px; padding: 0 36px;
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid #e8e8e4; background: #ffffffed; backdrop-filter: blur(16px);
+}
+.staging-env .able-topbar { top: 1.5rem; }
+.able-wordmark { display: inline-flex; align-items: center; gap: 9px; font-size: 19px; font-weight: 600; letter-spacing: -.7px; }
+.able-wordmark > span { width: 8px; height: 8px; border-radius: 2px; background: var(--color-able-orange); }
+.able-workspace { max-width: 1600px; margin: 0 auto; padding: 32px 36px calc(120px + env(safe-area-inset-bottom)); }
+.able-tabbar {
+  position: fixed; z-index: 40; left: 50%; transform: translateX(-50%); bottom: calc(14px + env(safe-area-inset-bottom));
+  display: flex; align-items: flex-end; gap: 6px; padding: 6px; width: max-content; max-width: calc(100% - 24px);
+  border: 1px solid #e2e1df; border-radius: 19px; background: #fffffff2; backdrop-filter: blur(18px);
+  box-shadow: 0 8px 32px #0000000d, 0 1px 3px #0000000a;
+}
+.able-tab { display: flex; min-width: 68px; min-height: 54px; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 8px 10px 7px; border-radius: 15px; color: #777 !important; font-size: 11px; line-height: 1.15; font-weight: 500; transition: background-color 120ms, color 120ms; }
+.able-tab svg { width: 20px; height: 20px; stroke-width: 1.7; }
+.able-tab:hover, .able-tab.is-open { color: #111 !important; background: #f4f4f1; }
+.able-tab.is-on { color: #fff !important; background: #111; box-shadow: 0 2px 5px #0002; }
+.able-nav-group { position: relative; }
+.able-nav-sheet { position: absolute; bottom: calc(100% + 20px); left: 50%; transform: translateX(-50%); width: min(340px, calc(100vw - 32px)); border: 1px solid #e2e1df; border-radius: 16px; padding: 7px; background: #fff; box-shadow: 0 12px 40px #00000014; }
+.able-nav-group:nth-child(2) .able-nav-sheet { left: 0; transform: none; }
+.able-nav-group:last-child .able-nav-sheet { left: auto; right: 0; transform: none; }
+.able-nav-sheet > p { padding: 6px 10px; color: #85847e; font-size: 9px; letter-spacing: .8px; text-transform: uppercase; font-weight: 500; }
+.able-nav-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }
+.able-nav-grid a { display: flex; align-items: center; gap: 8px; padding: 10px; min-height: 40px; border-radius: 11px; color: #72716d; font-size: 12px; }
+.able-nav-grid svg { width: 15px; height: 15px; flex-shrink: 0; }
+.able-nav-grid a:hover { color: #111; background: #f4f4f1; }
+.able-nav-grid a[aria-current="page"] { background: #111; color: #fff; }
+.jp-shell .able-nav-disclosure { position: absolute; top: 1px; right: 1px; width: 20px; height: 20px; border-radius: 5px; font-size: 12px; opacity: 0; color: #72716d; }
+.able-nav-group:focus-within .able-nav-disclosure, .able-nav-disclosure:focus-visible { opacity: 1; background: #f4f4f1; }
+.able-tab:focus-visible, .able-nav-grid a:focus-visible, .able-nav-disclosure:focus-visible { outline: 2px solid #111; outline-offset: 3px; }
+@media (max-width: 640px) {
+  .able-topbar { padding: 0 16px; height: 60px; }
+  .able-workspace { padding: 24px 16px calc(110px + env(safe-area-inset-bottom)); }
+  .able-tabbar { width: calc(100% - 20px); max-width: none; gap: 2px; padding: 5px; }
+  .able-tabbar > .able-tab, .able-nav-group { flex: 1; min-width: 0; }
+  .able-tab { min-width: 0; width: 100%; min-height: 52px; padding: 8px 2px; font-size: 9px; }
+  .able-tab svg { width: 19px; height: 19px; }
+  .able-nav-group { position: static; }
+  .able-nav-sheet, .able-nav-group:nth-child(2) .able-nav-sheet, .able-nav-group:last-child .able-nav-sheet { left: 50%; right: auto; transform: translateX(-50%); }
+  .jp-shell .able-nav-disclosure { position: static; height: 0; width: 100%; overflow: hidden; }
+  .jp-shell .able-nav-disclosure:focus-visible { height: 20px; }
+}
+@media (prefers-reduced-motion: reduce) { .able-tab { transition: none; } }
