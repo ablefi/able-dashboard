@@ -118,7 +118,7 @@ export function ColumnsButton<T>({
     <div className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex h-8 items-center gap-1.5 rounded-xl border border-white/[0.12] bg-jp-navy-card/60 px-3 text-xs font-medium text-white transition-colors hover:border-white/[0.22] hover:bg-jp-navy-card"
+        className="inline-flex h-8 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-medium text-ink transition-colors hover:border-slate-300 hover:bg-slate-50"
       >
         <Columns3 className="h-3.5 w-3.5" />
         Columns

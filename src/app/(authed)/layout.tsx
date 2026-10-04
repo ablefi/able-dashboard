@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { useAuth } from "@/context/AuthContext";
-import Sidebar from "@/components/layout/Sidebar";
+import BottomNav from "@/components/layout/BottomNav";
+import Link from "next/link";
 import UserAnalysisAutoRefresh from "@/components/UserAnalysisAutoRefresh";
 
 /**
@@ -10,39 +11,28 @@ import UserAnalysisAutoRefresh from "@/components/UserAnalysisAutoRefresh";
  * reachable by anyone who can reach the deployment.
  */
 export default function AuthedLayout({ children }: { children: React.ReactNode }) {
-  const { user, initialized } = useAuth();
-  const [collapsed, setCollapsed] = useState(false);
-
-
-
-  useEffect(() => {
-    if (typeof window !== "undefined") setCollapsed(localStorage.getItem("sidebar-collapsed") === "1");
-  }, []);
-
-  const toggleCollapsed = () => {
-    setCollapsed((prev) => {
-      const next = !prev;
-      if (typeof window !== "undefined") localStorage.setItem("sidebar-collapsed", next ? "1" : "0");
-      return next;
-    });
-  };
+  const { initialized } = useAuth();
 
   if (!initialized) {
     return (
-      <div className="jp-shell flex min-h-screen items-center justify-center bg-jp-navy">
+      <div className="jp-shell flex min-h-screen items-center justify-center bg-white">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-jp-blue border-t-transparent" />
       </div>
     );
   }
 
   return (
-    <div className="jp-shell min-h-screen bg-jp-navy text-ink">
-      <Sidebar collapsed={collapsed} onToggle={toggleCollapsed} sections={user?.sections ?? []} isOwner />
+    <div className="jp-shell min-h-screen bg-white text-ink">
+      <header className="able-topbar">
+        <Link href="/" className="able-wordmark"><span aria-hidden="true" />Able Ops</Link>
+        <span className="text-xs text-ink-faint">Marketing workspace</span>
+      </header>
       {/* Daily background refresh of User Analysis — fires from any page. */}
       <UserAnalysisAutoRefresh />
-      <main className={"transition-[padding] duration-200 " + (collapsed ? "pl-[4.25rem]" : "pl-64")}>
-        <div className="px-6 py-8 lg:px-10">{children}</div>
+      <main className="able-workspace">
+        {children}
       </main>
+      <BottomNav />
     </div>
   );
 }

@@ -13,11 +13,11 @@ import { resolveTimeframe } from "@/lib/timeframe";
 import { TimeframeFilter } from "@/components/creators/TimeframeFilter";
 import { useCreatorTimeframe } from "@/components/creators/useCreatorTimeframe";
 
-const CHART = { grid: "rgba(255,255,255,0.05)", tick: "#8499b3" };
+const CHART = { grid: "rgba(23,35,30,0.08)", tick: "#66756d" };
 const TOOLTIP_STYLE = {
-  contentStyle: { backgroundColor: "#15203a", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "8px" },
-  labelStyle: { color: "#f0f4f8" },
-  itemStyle: { color: "#f0f4f8" },
+  contentStyle: { backgroundColor: "#ffffff", border: "1px solid #dce4df", borderRadius: "8px" },
+  labelStyle: { color: "#17231e" },
+  itemStyle: { color: "#17231e" },
 };
 const PLATFORM_COLOR: Record<string, string> = { instagram: "#e1306c", tiktok: "#22d3ee", youtube: "#ef4444" };
 const PLATFORM_LABEL: Record<string, string> = { instagram: "Instagram", tiktok: "TikTok", youtube: "YouTube" };
@@ -160,7 +160,7 @@ export default function Performance({ scope = "counted" }: { scope?: "counted" |
                         <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
                         <XAxis dataKey="date" tick={{ fill: CHART.tick, fontSize: 11 }} tickLine={false} axisLine={false} minTickGap={24} />
                         <YAxis tick={{ fill: CHART.tick, fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={fmtCompact} width={44} />
-                        <Tooltip {...TOOLTIP_STYLE} formatter={(v: number) => [fmtCompact(v), "Views"]} />
+                        <Tooltip {...TOOLTIP_STYLE} formatter={(v) => [typeof v === "number" ? fmtCompact(v) : "–", "Views"]} />
                         <Area type="monotone" dataKey="views" stroke="#5b8def" strokeWidth={2} fill="url(#perfViews)" />
                       </AreaChart>
                     </ResponsiveContainer>
@@ -178,7 +178,7 @@ export default function Performance({ scope = "counted" }: { scope?: "counted" |
                         <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
                         <XAxis dataKey="date" tick={{ fill: CHART.tick, fontSize: 11 }} tickLine={false} axisLine={false} minTickGap={24} />
                         <YAxis tick={{ fill: CHART.tick, fontSize: 11 }} tickLine={false} axisLine={false} allowDecimals={false} width={32} />
-                        <Tooltip {...TOOLTIP_STYLE} formatter={(v: number) => [v, "Posts"]} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
+                        <Tooltip {...TOOLTIP_STYLE} formatter={(v) => [typeof v === "number" ? v : "–", "Posts"]} cursor={{ fill: "rgba(0,0,0,0.04)" }} />
                         <Bar dataKey="posts" fill="#8b5cf6" radius={[4, 4, 0, 0]} maxBarSize={28} />
                       </BarChart>
                     </ResponsiveContainer>
@@ -230,7 +230,7 @@ export default function Performance({ scope = "counted" }: { scope?: "counted" |
                           <Pie data={stats.platform} dataKey="views" nameKey="platform" cx="50%" cy="50%" innerRadius={42} outerRadius={70} paddingAngle={2} stroke="none">
                             {stats.platform.map((p) => <Cell key={p.platform} fill={PLATFORM_COLOR[p.platform] || "#5b8def"} />)}
                           </Pie>
-                          <Tooltip {...TOOLTIP_STYLE} formatter={(v: number, n: string) => [fmtCompact(v), PLATFORM_LABEL[n] || n]} />
+                          <Tooltip {...TOOLTIP_STYLE} formatter={(v, n) => [typeof v === "number" ? fmtCompact(v) : "–", PLATFORM_LABEL[String(n)] || String(n ?? "Views")]} />
                         </PieChart>
                       </ResponsiveContainer>
                       <ul className="mt-3 space-y-1.5">

@@ -26,19 +26,19 @@ function StatusBadge({ active, expiredAt }: { active: boolean; expiredAt?: strin
   return <Badge variant="success">Active</Badge>;
 }
 
-// Navy Chart.js options
+// Light Chart.js options
 const baseOptions = (currency: boolean) => ({
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
-    legend: { position: "top" as const, labels: { color: "#cbd5e1" } },
-    tooltip: { backgroundColor: "#15203a", titleColor: "#f0f4f8", bodyColor: "#94a3b8", borderColor: "rgba(96,165,250,0.3)", borderWidth: 1 },
+    legend: { position: "top" as const, labels: { color: "#586760" } },
+    tooltip: { backgroundColor: "#ffffff", titleColor: "#17231e", bodyColor: "#586760", borderColor: "#dce4df", borderWidth: 1 },
   },
   scales: {
-    x: { ticks: { color: "#94a3b8" }, grid: { color: "rgba(255,255,255,0.06)" } },
+    x: { ticks: { color: "#66756d" }, grid: { color: "rgba(23,35,30,0.08)" } },
     y: {
-      ticks: { color: "#94a3b8", callback: (v: any) => (currency ? "$" + v.toLocaleString() : v.toLocaleString()) },
-      grid: { color: "rgba(255,255,255,0.06)" },
+      ticks: { color: "#66756d", callback: (v: any) => (currency ? "$" + v.toLocaleString() : v.toLocaleString()) },
+      grid: { color: "rgba(23,35,30,0.08)" },
     },
   },
 });

@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
@@ -182,7 +181,7 @@ export default function Sidebar({
     "group flex items-center gap-2.5 rounded-lg py-2 text-sm transition-colors " +
     (collapsed ? "justify-center px-0" : "px-3") +
     " " +
-    (activeHref === href ? "bg-jp-blue/15 text-jp-blue-light" : "text-ink-muted hover:bg-white/[0.04] hover:text-ink");
+    (activeHref === href ? "bg-emerald-50 font-medium text-jp-blue-dark" : "text-ink-muted hover:bg-slate-100 hover:text-ink");
 
   const iconClass = (href: string) =>
     "h-4 w-4 shrink-0 " + (activeHref === href ? "text-jp-blue-light" : "text-ink-faint group-hover:text-ink-muted");
@@ -190,17 +189,17 @@ export default function Sidebar({
   return (
     <aside
       className={
-        "fixed inset-y-0 left-0 z-30 flex flex-col border-r border-white/[0.06] bg-jp-navy-light/40 backdrop-blur-sm transition-[width] duration-200 " +
+        "fixed inset-y-0 left-0 z-30 flex flex-col border-r border-slate-200 bg-[#f8faf9] transition-[width] duration-200 " +
         (collapsed ? "w-[4.25rem]" : "w-64")
       }
     >
       {/* Brand */}
       <div className={"flex items-center gap-2.5 py-5 " + (collapsed ? "justify-center px-0" : "px-5")}>
-        <Image src="/icon-200.png" alt="Just Pray" width={32} height={32} className="rounded-lg" />
+        <div aria-hidden className="flex h-8 w-8 items-center justify-center rounded-lg bg-jp-blue text-sm font-bold text-white">A</div>
         {!collapsed && (
           <div className="leading-tight">
-            <div className="text-sm font-semibold text-ink">Just Pray</div>
-            <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-ink-faint">Admin</div>
+            <div className="text-sm font-semibold text-ink">Able</div>
+            <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-ink-faint">Ops</div>
           </div>
         )}
       </div>
@@ -227,7 +226,7 @@ export default function Sidebar({
             // Icon mode: divider + all items as icons (no collapsing).
             return (
               <div key={node.id} className="mt-3">
-                <div className="mx-2 mb-2 border-t border-white/[0.06]" />
+                <div className="mx-2 mb-2 border-t border-slate-200" />
                 <ul className="space-y-0.5">
                   {node.items.map((it) => {
                     const Icon = it.icon;
@@ -273,7 +272,7 @@ export default function Sidebar({
       </nav>
 
       {/* Footer: collapse toggle */}
-      <div className="space-y-1 border-t border-white/[0.06] p-3">
+      <div className="space-y-1 border-t border-slate-200 p-3">
         <button
           onClick={onToggle}
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}

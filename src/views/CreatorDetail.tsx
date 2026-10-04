@@ -81,8 +81,8 @@ const PLATFORM_META: { key: PlatformKey; label: string; color: string }[] = [
   { key: "youtube", label: "YouTube", color: "#ef4444" },
 ];
 const TOOLTIP_STYLE = {
-  contentStyle: { backgroundColor: "#15203a", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "8px" },
-  labelStyle: { color: "#f0f4f8" }, itemStyle: { color: "#f0f4f8" },
+  contentStyle: { backgroundColor: "#ffffff", border: "1px solid #dce4df", borderRadius: "8px" },
+  labelStyle: { color: "#17231e" }, itemStyle: { color: "#17231e" },
 };
 const authHeaders = (): Record<string, string> => {
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
@@ -592,7 +592,7 @@ export default function CreatorDetail({ slug }: { slug: string }) {
                   <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
                   <XAxis dataKey="date" tick={{ fill: CHART.tick, fontSize: 11 }} tickLine={false} axisLine={false} minTickGap={24} />
                   <YAxis tick={{ fill: CHART.tick, fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={fmtCompact} width={56} />
-                  <Tooltip {...TOOLTIP_STYLE} formatter={(v: number, name: string) => [fmtCompact(v), name]} />
+                  <Tooltip {...TOOLTIP_STYLE} formatter={(v, name) => [typeof v === "number" ? fmtCompact(v) : "–", String(name ?? "Views")]} />
                   {segmented ? (
                     <>
                       <Legend wrapperStyle={{ fontSize: 11, paddingTop: 6 }} iconType="plainline" />
