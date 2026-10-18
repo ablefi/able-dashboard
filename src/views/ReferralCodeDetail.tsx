@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { fmtDate, fmtMonth } from "@/lib/dates";
 import { useParams, useRouter } from "next/navigation";
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement,
@@ -12,13 +13,14 @@ import { useReferralCodesApi, ReferralCodeDetailedRevenue, RevenueByProduct } fr
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
+import Code from "@/components/ui/Code";
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ChartTitle, ChartTooltip, Legend, Filler);
 
 const formatCurrency = (amount: number, currency = "USD") =>
   new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: 2 }).format(amount);
-const formatDate = (s: string) => new Date(s).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
-const formatMonth = (s: string) => new Date(s + "-01").toLocaleDateString("en-US", { year: "numeric", month: "short" });
+const formatDate = (s: string) => fmtDate(s);
+const formatMonth = (s: string) => fmtMonth(s + "-01");
 
 function StatusBadge({ active, expiredAt }: { active: boolean; expiredAt?: string }) {
   if (!active) return <Badge variant="danger">Inactive</Badge>;
@@ -26,19 +28,19 @@ function StatusBadge({ active, expiredAt }: { active: boolean; expiredAt?: strin
   return <Badge variant="success">Active</Badge>;
 }
 
-// Light Chart.js options
+// Navy Chart.js options
 const baseOptions = (currency: boolean) => ({
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
-    legend: { position: "top" as const, labels: { color: "#586760" } },
-    tooltip: { backgroundColor: "#ffffff", titleColor: "#17231e", bodyColor: "#586760", borderColor: "#dce4df", borderWidth: 1 },
+    legend: { position: "top" as const, labels: { color: "#cbd5e1" } },
+    tooltip: { backgroundColor: "#15203a", titleColor: "#f0f4f8", bodyColor: "#94a3b8", borderColor: "rgba(96,165,250,0.3)", borderWidth: 1 },
   },
   scales: {
-    x: { ticks: { color: "#66756d" }, grid: { color: "rgba(23,35,30,0.08)" } },
+    x: { ticks: { color: "#94a3b8" }, grid: { color: "rgba(255,255,255,0.06)" } },
     y: {
-      ticks: { color: "#66756d", callback: (v: any) => (currency ? "$" + v.toLocaleString() : v.toLocaleString()) },
-      grid: { color: "rgba(23,35,30,0.08)" },
+      ticks: { color: "#94a3b8", callback: (v: any) => (currency ? "$" + v.toLocaleString() : v.toLocaleString()) },
+      grid: { color: "rgba(255,255,255,0.06)" },
     },
   },
 });
@@ -105,7 +107,7 @@ const ReferralCodeDetail: React.FC = () => {
   }
   if (error || !details) {
     return (
-      <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+      <div className="rounded-lg border border-app-orange/30 bg-app-orange/10 p-4 text-sm text-app-orange">
         <div>{error || "The requested referral code could not be found."}</div>
         <Button variant="secondary" size="sm" className="mt-3" onClick={() => router.push("/referral-codes")}>Back to List</Button>
       </div>
@@ -113,10 +115,10 @@ const ReferralCodeDetail: React.FC = () => {
   }
 
   const stats = [
-    { label: "Net Revenue", value: formatCurrency(details.netRevenue), color: "text-emerald-400" },
-    { label: "Total Users", value: `${details.totalUsers} (${details.subscribedUsers} sub)`, color: "text-jp-blue-light" },
-    { label: "Transactions", value: details.totalTransactions.toLocaleString(), color: "text-jp-blue-light" },
-    { label: "Refunds", value: formatCurrency(details.totalRefunds), color: "text-rose-400" },
+    { label: "Net Revenue", value: formatCurrency(details.netRevenue), color: "text-app-green" },
+    { label: "Total Users", value: `${details.totalUsers} (${details.subscribedUsers} sub)`, color: "text-app-blue-light" },
+    { label: "Transactions", value: details.totalTransactions.toLocaleString(), color: "text-app-blue-light" },
+    { label: "Refunds", value: formatCurrency(details.totalRefunds), color: "text-app-red-text" },
   ];
 
   return (
@@ -135,7 +137,7 @@ const ReferralCodeDetail: React.FC = () => {
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
           <div>
             <div className="text-xs text-ink-faint">Referral Code</div>
-            <div className="font-mono font-semibold text-jp-blue-light">{details.code}</div>
+            <div><Code className="text-[0.875rem] font-semibold">{details.code}</Code></div>
           </div>
           <div>
             <div className="text-xs text-ink-faint">Description</div>
@@ -159,8 +161,8 @@ const ReferralCodeDetail: React.FC = () => {
       {/* Summary stats */}
       <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
         {stats.map((s) => (
-          <div key={s.label} className="relative overflow-hidden rounded-xl border border-white/[0.06] bg-jp-navy-card/60 p-5">
-            <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-jp-blue/40 to-transparent" />
+          <div key={s.label} className="relative overflow-hidden rounded-xl border border-white/[0.06] bg-app-navy-card/60 p-5">
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-app-blue/40 to-transparent" />
             <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-faint">{s.label}</div>
             <div className={"mt-2 text-2xl font-semibold leading-none num " + s.color}>{s.value}</div>
           </div>
@@ -192,12 +194,12 @@ const ReferralCodeDetail: React.FC = () => {
             <tbody>
               {details.revenueByProduct.map((p: RevenueByProduct) => (
                 <tr key={`${p.productId}-${p.currency}`} className="border-b border-white/[0.04] last:border-0 text-ink-muted">
-                  <td className="px-4 py-3 font-mono text-jp-blue-light">{p.productId}</td>
-                  <td className="px-4 py-3"><Badge variant="info">{p.currency}</Badge></td>
-                  <td className="px-4 py-3 font-semibold text-emerald-400">{formatCurrency(p.netRevenue, p.currency)}</td>
-                  <td className="px-4 py-3 text-jp-blue-light">{formatCurrency(p.totalRevenue, p.currency)}</td>
+                  <td className="px-4 py-3"><Code>{p.productId}</Code></td>
+                  <td className="px-4 py-3"><Code>{p.currency}</Code></td>
+                  <td className="px-4 py-3 font-semibold text-app-green">{formatCurrency(p.netRevenue, p.currency)}</td>
+                  <td className="px-4 py-3 text-app-blue-light">{formatCurrency(p.totalRevenue, p.currency)}</td>
                   <td className="px-4 py-3">{p.transactionCount.toLocaleString()}</td>
-                  <td className="px-4 py-3">{p.refundCount} {p.totalRefunds > 0 && <span className="text-rose-400">({formatCurrency(p.totalRefunds, p.currency)})</span>}</td>
+                  <td className="px-4 py-3">{p.refundCount} {p.totalRefunds > 0 && <span className="text-app-red-text">({formatCurrency(p.totalRefunds, p.currency)})</span>}</td>
                 </tr>
               ))}
             </tbody>

@@ -1,17 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth";
+import { requireCreatorsSession, assertPostInMarket, marketErrorStatus } from "@/lib/creatorMarket";
 import { fetchPostForArchive, updatePost } from "@/lib/supabaseRest";
 import { addManualOutlier } from "@/lib/creatorsAdmin";
+import { mirrorPostThumbnail, storageHeaders } from "@/lib/postThumbs";
 
 /**
- * Outlier archive → publish pipeline, ported from jp-creators' archivePost /
+ * Outlier archive → publish pipeline, ported from roster' archivePost /
  * setPublishedToTop / deleteArchive. POST { action, id, value? }:
  *   - archive       : resolve a fresh CDN URL via ScrapeCreators, download the
  *                     video, upload it to the public `top-videos` Storage
  *                     bucket, mark archived + backfill metadata. YouTube is
  *                     marked skipped_yt (link-out, no download).
  *   - publish       : flip published_to_top (gated on archived/skipped_yt) —
- *                     this is what actually promotes the post on the public site.
+ *                     this is what actually puts a post on your website's top videos page.
  *   - delete_archive: delete the blob + clear archive_* + published_to_top.
  * Gated by `creators`.
  */
@@ -88,7 +90,7 @@ async function runArchive(id: string): Promise<{ ok: boolean; status?: string; u
     return { ok: false, status: "failed", error: msg };
   }
   if (!mediaUrl) {
-    const msg = "Upstream returned no video URL — post may have been deleted.";
+    const msg = "Upstream returned no video URL, post may have been deleted.";
     await updatePost(id, { archive_status: "failed", archive_error: msg });
     return { ok: false, status: "failed", error: msg };
   }
@@ -128,7 +130,7 @@ async function runArchive(id: string): Promise<{ ok: boolean; status?: string; u
   const objectPath = `posts/${id}.mp4`;
   const up = await fetch(`${SUPA()}/storage/v1/object/top-videos/${objectPath}`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${SVC()}`, "Content-Type": contentType, "x-upsert": "true", "Cache-Control": "public, max-age=31536000, immutable" },
+    headers: storageHeaders({ "Content-Type": contentType, "x-upsert": "true", "Cache-Control": "public, max-age=31536000, immutable" }),
     body: bytes,
   });
   if (!up.ok) {
@@ -144,7 +146,13 @@ async function runArchive(id: string): Promise<{ ok: boolean; status?: string; u
   if (meta.view_count && meta.view_count > 0) patch.view_count = meta.view_count;
   if (meta.like_count !== undefined) patch.like_count = meta.like_count;
   if (meta.comment_count !== undefined) patch.comment_count = meta.comment_count;
-  if (meta.thumbnail_url) patch.thumbnail_url = meta.thumbnail_url;
+  // Keep our own copy of the thumbnail. meta.thumbnail_url is fresh, straight
+  // from the ScrapeCreators call above, but it is a signed CDN link that will
+  // 403 in a few months and leave this card blank. Falls back to the CDN URL if
+  // mirroring fails, since a link that works for now beats no link.
+  if (meta.thumbnail_url) {
+    patch.thumbnail_url = (await mirrorPostThumbnail(id, meta.thumbnail_url, post.platform)) ?? meta.thumbnail_url;
+  }
   if (meta.posted_at) patch.posted_at = meta.posted_at;
   await updatePost(id, patch);
 
@@ -152,8 +160,9 @@ async function runArchive(id: string): Promise<{ ok: boolean; status?: string; u
 }
 
 export async function POST(req: NextRequest) {
-  const guard = await requireSession(req, "creators");
+  const guard = await requireCreatorsSession(req);
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
+  const market = guard.market;
 
   try {
     const body = await req.json();
@@ -161,10 +170,14 @@ export async function POST(req: NextRequest) {
 
     // Add an outlier by pasting a URL (id not required for this one).
     if (action === "add_manual") {
+      // The creator is resolved from the URL and can be anyone, so pasting a
+      // link stays a main Creators section action for now.
+      if (market === "alt") return NextResponse.json({ error: "Add by URL is only available in the main Creators section for now." }, { status: 400 });
       return NextResponse.json(await addManualOutlier(body));
     }
 
     if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+    await assertPostInMarket(String(id), market);
 
     if (action === "archive") {
       const r = await runArchive(String(id));
@@ -184,13 +197,15 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "delete_archive") {
-      await fetch(`${SUPA()}/storage/v1/object/top-videos/posts/${id}.mp4`, { method: "DELETE", headers: { Authorization: `Bearer ${SVC()}` } }).catch(() => {});
+      await fetch(`${SUPA()}/storage/v1/object/top-videos/posts/${id}.mp4`, { method: "DELETE", headers: storageHeaders() }).catch(() => {});
       await updatePost(String(id), { archive_status: null, archive_video_url: null, archived_at: null, archive_error: null, published_to_top: false });
       return NextResponse.json({ ok: true });
     }
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   } catch (err) {
+    const status = marketErrorStatus(err);
+    if (status) return NextResponse.json({ error: String((err as Error).message) }, { status });
     console.error("Outliers action error:", err);
     return NextResponse.json({ error: "Action failed", details: String(err) }, { status: 500 });
   }

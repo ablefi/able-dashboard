@@ -1,7 +1,7 @@
-import Performance from "@/views/Performance";
+import { redirect } from "next/navigation";
 
-/** "Performance" — EVERY post the creators made (approved or not): the
- * general baseline to compare against Performance for Us. */
+/** General Creative Performance (every post, approved or not) was retired
+ * from the dashboard on 8 Oct 2026; old links land on Performance. */
 export default function CreatorPerformanceAllPage() {
-  return <Performance scope="all" />;
+  redirect("/creators/performance");
 }

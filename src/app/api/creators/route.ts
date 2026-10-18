@@ -1,18 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth";
+import { requireCreatorsSession, marketCreatorIds } from "@/lib/creatorMarket";
 import { fetchCreatorsUniverse, fetchRosterStats, fetchCreatorPostsForStats, appState } from "@/lib/supabaseRest";
 import { computeRoster, rosterFromAggregates, type Creator } from "@/lib/creators";
 
 /**
- * Creators roster — top-level jp-creators with post/view stats over a window
- * (personas roll up their children). Mirrors jp-creators' listCreators +
+ * Creators roster — top-level roster with post/view stats over a window
+ * (personas roll up their children). Mirrors roster' listCreators +
  * getCreatorCounts. Gated by the `creators` section.
  */
 export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
-  const guard = await requireSession(req, "creators");
+  const guard = await requireCreatorsSession(req);
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
+  const market = guard.market;
 
   try {
     const { searchParams } = new URL(req.url);
@@ -34,7 +36,8 @@ export async function GET(req: NextRequest) {
       appState("sc_credits").then((v) => (typeof v?.remaining === "number" ? v.remaining : null)).catch(() => null),
     ]);
 
-    const isJp = (c: Creator) => (c.tags ?? []).includes("jp-creators");
+    const inMarket = await marketCreatorIds(market, universe);
+    const isJp = (c: Creator) => (c.tags ?? []).includes("roster") && inMarket.has(c.id);
     const allTopLevel = universe.filter((c) => isJp(c) && !c.parent_id);
     const counts = {
       active: allTopLevel.filter((c) => c.status === "active").length,

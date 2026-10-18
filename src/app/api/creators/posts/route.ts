@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth";
+import { requireCreatorsSession, marketCreatorIds, assertPostInMarket, marketErrorStatus } from "@/lib/creatorMarket";
 import { fetchLeafCreators, fetchPostsList, updatePost } from "@/lib/supabaseRest";
 import { postCounts, isCommunityPost, type Creator, type CreatorType } from "@/lib/creators";
 
 /**
  * Post feed for the Creators › Posts tab. GET returns the filtered feed +
  * an all-time top-10-by-views rail. PATCH toggles approve/exclude/outlier.
- * Mirrors jp-creators' listAllPosts + PostActions. Gated by `creators`.
+ * Mirrors roster' listAllPosts + PostActions. Gated by `creators`.
  */
 export const maxDuration = 60;
 
@@ -31,8 +32,9 @@ function ytVariantOk(platform: string | undefined, p: FeedPost): boolean {
 }
 
 export async function GET(req: NextRequest) {
-  const guard = await requireSession(req, "creators");
+  const guard = await requireCreatorsSession(req);
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
+  const market = guard.market;
 
   try {
     const { searchParams } = new URL(req.url);
@@ -44,7 +46,8 @@ export async function GET(req: NextRequest) {
     const fromISO = searchParams.get("from") || new Date(Date.now() - days * 86400_000).toISOString();
     const toISO = searchParams.get("to") || new Date().toISOString();
 
-    const leaves = (await fetchLeafCreators()) as Creator[];
+    const inMarket = await marketCreatorIds(market);
+    const leaves = ((await fetchLeafCreators()) as Creator[]).filter((c) => inMarket.has(c.id));
     const creatorMap = new Map(leaves.map((c) => [c.id, c]));
     const ids = leaves.map((c) => c.id);
 
@@ -91,14 +94,16 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const guard = await requireSession(req, "creators");
+  const guard = await requireCreatorsSession(req);
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
+  const market = guard.market;
 
   try {
     const { id, field, value } = await req.json();
     if (!id || !["approved", "excluded", "is_outlier"].includes(field)) {
       return NextResponse.json({ error: "id + valid field required" }, { status: 400 });
     }
+    await assertPostInMarket(String(id), market);
     const patch: Record<string, unknown> = { [field]: !!value };
     // Approving clears excluded and vice-versa (can't be both).
     if (field === "approved" && value) patch.excluded = false;
@@ -106,6 +111,8 @@ export async function PATCH(req: NextRequest) {
     await updatePost(String(id), patch);
     return NextResponse.json({ ok: true });
   } catch (err) {
+    const status = marketErrorStatus(err);
+    if (status) return NextResponse.json({ error: String((err as Error).message) }, { status });
     console.error("Posts PATCH error:", err);
     return NextResponse.json({ error: "Failed to update post", details: String(err) }, { status: 500 });
   }

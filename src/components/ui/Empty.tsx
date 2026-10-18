@@ -6,14 +6,25 @@ export default function Empty({
   description,
   icon,
   action,
+  compact = false,
 }: {
   title: string;
   description?: ReactNode;
   icon?: ReactNode;
   action?: ReactNode;
+  /** For an empty state INSIDE a card or a chart well. The full block is sized
+   *  for a whole page and would force a 280px chart card to twice its height,
+   *  which is why these were all hand-rolled one-liners instead. */
+  compact?: boolean;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-2xl border border-white/[0.06] bg-jp-navy-card/40 px-6 py-16 text-center backdrop-blur-sm">
+    <div
+      className={
+        compact
+          ? "flex h-full flex-col items-center justify-center px-6 py-8 text-center"
+          : "flex flex-col items-center justify-center rounded-2xl border border-white/[0.06] bg-app-navy-card/40 px-6 py-16 text-center backdrop-blur-sm"
+      }
+    >
       {icon && (
         <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.04] text-ink-muted">
           {icon}

@@ -3,13 +3,14 @@
 import { useState, useTransition } from "react";
 import { Check, CircleSlash, Loader2, RefreshCw, Trash2, Globe, Film } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { creatorApi } from "@/lib/creatorMarketClient";
 
 const authHeaders = (): Record<string, string> => {
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 async function action(body: Record<string, unknown>) {
-  const res = await fetch("/api/creators/outliers", {
+  const res = await fetch(creatorApi("/api/creators/outliers"), {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(body),
@@ -20,10 +21,10 @@ async function action(body: Record<string, unknown>) {
 type ArchiveStatus = "pending" | "archived" | "failed" | "skipped_yt" | null;
 
 /**
- * Admin row under each outlier card — ported from jp-creators'
+ * Admin row under each outlier card — ported from roster'
  * OutlierAdminControls. Shows archive status (so you know the video is
  * safely backed up to the top-videos bucket) and gates the Publish
- * toggle that actually promotes the post on the public site.
+ * toggle that actually pushes the post to your website's top videos page.
  *
  *   star → auto-archives → review → Publish → live on /topvideos
  */
@@ -84,13 +85,13 @@ export function OutlierAdminControls({
       <div className="flex items-center gap-1.5">
         {/* Archive status */}
         {status === "pending" ? (
-          pill("bg-amber-500/15 text-amber-300", <Loader2 className="h-2.5 w-2.5 animate-spin" />, "Archiving…")
+          pill("bg-app-orange/15 text-app-orange", <Loader2 className="h-2.5 w-2.5 animate-spin" />, "Archiving…")
         ) : status === "archived" ? (
-          pill("bg-emerald-500/15 text-emerald-300", <Check className="h-2.5 w-2.5" strokeWidth={3} />, "Archived")
+          pill("bg-app-green/15 text-app-green", <Check className="h-2.5 w-2.5" strokeWidth={3} />, "Archived")
         ) : status === "skipped_yt" ? (
           pill("bg-white/[0.06] text-ink-muted", <Film className="h-2.5 w-2.5" />, "Link-out")
         ) : status === "failed" ? (
-          <button onClick={doArchive} disabled={pending} className="inline-flex items-center gap-1 rounded-md bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-medium text-rose-300 hover:bg-rose-500/25">
+          <button onClick={doArchive} disabled={pending} className="inline-flex items-center gap-1 rounded-md bg-app-red/15 px-1.5 py-0.5 text-[10px] font-medium text-app-red-text hover:bg-app-red/25">
             <RefreshCw className="h-2.5 w-2.5" /> Retry archive
           </button>
         ) : (
@@ -101,7 +102,7 @@ export function OutlierAdminControls({
 
         {/* Delete archive (only when there's something to clear) */}
         {(status === "archived" || status === "failed") && (
-          <button onClick={doDelete} disabled={pending} title="Delete archive" className="inline-flex items-center justify-center rounded-md p-1 text-ink-faint transition-colors hover:bg-white/[0.06] hover:text-rose-300">
+          <button onClick={doDelete} disabled={pending} title="Delete archive" className="inline-flex items-center justify-center rounded-md p-1 text-ink-faint transition-colors hover:bg-white/[0.06] hover:text-app-red-text">
             <Trash2 className="h-3 w-3" />
           </button>
         )}
@@ -115,7 +116,7 @@ export function OutlierAdminControls({
         className={cn(
           "flex w-full items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition-colors",
           published
-            ? "bg-jp-blue/20 text-jp-blue-light ring-1 ring-inset ring-jp-blue/40 hover:bg-jp-blue/25"
+            ? "bg-app-blue/20 text-app-blue-light ring-1 ring-inset ring-app-blue/40 hover:bg-app-blue/25"
             : archived
               ? "bg-white/[0.05] text-ink hover:bg-white/[0.08]"
               : "cursor-not-allowed bg-white/[0.03] text-ink-faint/50",
@@ -125,7 +126,7 @@ export function OutlierAdminControls({
         {published ? "Published to topvideos" : "Publish to topvideos"}
       </button>
 
-      {error && <p className="text-[10px] leading-tight text-rose-300">{error}</p>}
+      {error && <p className="text-[10px] leading-tight text-app-red-text">{error}</p>}
     </div>
   );
 }

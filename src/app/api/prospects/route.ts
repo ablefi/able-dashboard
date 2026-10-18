@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth";
-import { fetchJpProspects, fetchProspectPosts } from "@/lib/supabaseRest";
+import { marketOf, marketCreatorIds, assertCreatorInMarket, marketErrorStatus } from "@/lib/creatorMarket";
+import { fetchProspects, fetchProspectPosts } from "@/lib/supabaseRest";
 import { createProspect, updateProspect, promoteProspect, deleteProspect } from "@/lib/creatorsAdmin";
 import type { Creator } from "@/lib/creators";
 
 /**
- * Prospects (jp-prospect tag) — people we're evaluating but not yet working
+ * Prospects (prospect tag) — people we're evaluating but not yet working
  * with. Each row gets per-platform + combined average views over the window.
- * Mirrors jp-creators' listProspects. Lives under Research, so gated by the
+ * Mirrors roster' listProspects. Lives under Research, so gated by the
  * `research` section.
  */
 export const maxDuration = 60;
@@ -15,7 +16,9 @@ export const maxDuration = 60;
 type Bucket = { views: number; count: number };
 
 export async function GET(req: NextRequest) {
-  const guard = await requireSession(req, "research");
+  // Main-roster prospects keep their Growth permission; second-market ones sit under the second-market section.
+  const market = marketOf(req);
+  const guard = await requireSession(req, market === "alt" ? "alt-creators" : "research");
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
   try {
@@ -25,7 +28,8 @@ export async function GET(req: NextRequest) {
     const fromISO = searchParams.get("from") || new Date(Date.now() - days * 86400_000).toISOString();
     const toISO = searchParams.get("to") || new Date().toISOString();
 
-    const list = (await fetchJpProspects(search)) as Creator[];
+    const inMarket = await marketCreatorIds(market);
+    const list = ((await fetchProspects(search)) as Creator[]).filter((c) => inMarket.has(c.id));
     if (list.length === 0) return NextResponse.json({ prospects: [], from: fromISO, to: toISO });
 
     const ids = list.map((c) => c.id);
@@ -67,18 +71,23 @@ export async function GET(req: NextRequest) {
 
 /** Prospect CRUD — POST { action: create|update|promote|delete, ... }. */
 export async function POST(req: NextRequest) {
-  const guard = await requireSession(req, "research");
+  // Main-roster prospects keep their Growth permission; second-market ones sit under the second-market section.
+  const market = marketOf(req);
+  const guard = await requireSession(req, market === "alt" ? "alt-creators" : "research");
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
   try {
     const body = await req.json();
+    if (body.action !== "create") await assertCreatorInMarket(String(body.id), market);
     switch (body.action) {
-      case "create": return NextResponse.json(await createProspect(body));
+      case "create": return NextResponse.json(await createProspect({ ...body, market }));
       case "update": return NextResponse.json(await updateProspect(body));
       case "promote": return NextResponse.json(await promoteProspect(String(body.id)));
       case "delete": return NextResponse.json(await deleteProspect(String(body.id)));
       default: return NextResponse.json({ error: "Unknown action" }, { status: 400 });
     }
   } catch (err) {
+    const status = marketErrorStatus(err);
+    if (status) return NextResponse.json({ ok: false, error: String((err as Error).message) }, { status });
     console.error("Prospect manage error:", err);
     return NextResponse.json({ ok: false, error: String(err) }, { status: 500 });
   }

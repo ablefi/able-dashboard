@@ -140,7 +140,7 @@ export const useReferralCodesApi = () => {
       const res = await axios.post<ReferralCode>("/admin/referral-codes", data);
       return res.data;
     } catch (err: any) {
-      setError(err.message || "Failed to create referral code");
+      setError("Could not create the code. Check the details and try again.");
       return null;
     } finally {
       setLoading(false);
@@ -160,7 +160,7 @@ export const useReferralCodesApi = () => {
       );
       return res.data;
     } catch (err: any) {
-      setError(err.message || "Failed to update referral code");
+      setError("Could not save changes. Your edits are still here; please try again.");
       return null;
     } finally {
       setLoading(false);
@@ -274,6 +274,7 @@ export const useReferralCodesApi = () => {
   };
 
   return {
+    clearError: () => setError(null),
     fetchReferralCodes,
     fetchReferralCodeDetails,
     fetchReferralRevenueAnalytics,

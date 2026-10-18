@@ -46,7 +46,7 @@ function displayNames(): Intl.DisplayNames | null {
   try {
     display = new Intl.DisplayNames(["en"], { type: "region" });
   } catch {
-    display = null; // ancient runtime — fall back to raw codes
+    display = null; // ancient runtime, fall back to raw codes
   }
   return display;
 }
@@ -92,21 +92,67 @@ export function regionName(code: string | null | undefined): string {
 
 // ---- name → code (for values stored as English names, e.g. "United States") ----
 
-/** Common variants that differ from the CLDR English name. */
+/** Common variants that differ from the CLDR name in every locale we index. */
 const NAME_ALIASES: Record<string, string> = {
   usa: "US", "united states of america": "US", america: "US",
-  uk: "GB", "great britain": "GB", england: "GB",
+  "соединённые штаты америки": "US", "соединенные штаты америки": "US",
+  uk: "GB", "great britain": "GB", england: "GB", scotland: "GB", wales: "GB",
   uae: "AE",
   turkey: "TR", turkiye: "TR",
-  palestine: "PS", "palestinian territories": "PS",
-  "czech republic": "CZ",
+  palestine: "PS", "palestinian territories": "PS", palestina: "PS", filistin: "PS",
+  "czech republic": "CZ", "republique tcheque": "CZ", "république tchèque": "CZ",
   burma: "MM", myanmar: "MM",
   "ivory coast": "CI",
   swaziland: "SZ",
   macedonia: "MK",
   "cape verde": "CV",
   "south korea": "KR", "north korea": "KP",
+  "republic of the congo": "CG", "democratic republic of the congo": "CD",
+  "hong kong ras chinoise": "HK",
 };
+
+/**
+ * Locales whose country names we index alongside English.
+ *
+ * The app stores whatever the DEVICE called the country, so `country` arrives
+ * as "Deutschland", "Türkiye", "Бельгия" or "Almanya" rather than an English
+ * name or a code. Indexing English only left Germany split across three rows
+ * (Deutschland 441, Germany 193, Almanya 1) and Switzerland across four, each
+ * drawn as its own dot at its own size. Reading every locale's names collapses
+ * them back onto one code.
+ *
+ * Ordered deliberately: English is first so it wins any collision, and later
+ * locales only fill gaps.
+ */
+const NAME_LOCALES = [
+  "en", "de", "fr", "es", "it", "nl", "sv", "nb", "da", "fi", "pl", "pt", "tr",
+  "ar", "ru", "id", "ms", "ur", "fa", "bn", "hi", "cs", "hr", "ro", "el", "he",
+  "ja", "ko", "zh", "zh-Hant", "th", "vi", "uk", "sr", "bg", "sk", "sl", "lt",
+  "lv", "et", "hu", "az", "kk", "uz", "sq", "bs", "mk", "ka", "hy", "sw", "ha",
+  "so", "ps", "sd", "ta", "te", "ml", "gu", "pa", "mr", "ne", "si", "km", "my",
+  "mn", "af", "is", "ga", "cy", "eu", "gl", "ca", "be",
+];
+
+/**
+ * Fold a country name to a comparison key.
+ *
+ * Handles the spelling drift that kept real countries out of the index: CLDR
+ * writes "Bosnia & Herzegovina" where people type "Bosnia and Herzegovina",
+ * uses a curly apostrophe in "Côte d’Ivoire", and drops the article that
+ * "The Gambia" carries (128 users, the largest single miss). Applied to both
+ * sides of the lookup, so the two always meet in the middle.
+ */
+function foldName(s: string): string {
+  return s
+    .normalize("NFC")
+    .toLowerCase()
+    .replace(/[\u2018\u2019\u02bc\u02bb`\u00b4]/g, "'")
+    .replace(/\band\b/g, "&")
+    .replace(/[,.]/g, " ")
+    .replace(/^the\s+/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 /** Deprecated ISO alpha-2 codes the Intl database still resolves to a
  * CURRENT country name (e.g. UK→"United Kingdom", FX→"France"). Without this
@@ -115,32 +161,50 @@ const NAME_ALIASES: Record<string, string> = {
 const DEPRECATED_CODES = new Set(["AN", "BU", "CS", "DD", "DY", "FX", "HV", "JT", "MI", "NH", "NQ", "PC", "PU", "PZ", "RH", "SU", "TP", "UK", "VD", "WK", "YD", "YU", "ZR"]);
 
 let nameToCode: Map<string, string> | null = null;
-/** Lazily build English-name → alpha-2 from the Intl region database (every
- * assigned code, ~250 entries) + the alias table. Memoized after first use. */
+/**
+ * Lazily build country-name → alpha-2 across every locale in NAME_LOCALES,
+ * plus the alias table. Memoized after first use.
+ *
+ * First writer wins, so English claims a name before any other locale can, and
+ * the explicit aliases are applied last and override everything.
+ *
+ * The DEPRECATED_CODES skip is load-bearing, not tidiness: several dead codes
+ * still resolve to a live country's name, and because the scan runs A→Z they
+ * would win the race. "DD" (East Germany) returns "Germany", so without the
+ * skip every German in the database lands on a country that stopped existing
+ * in 1990 and renders as a broken flag glyph.
+ */
 function nameIndex(): Map<string, string> {
   if (nameToCode) return nameToCode;
   nameToCode = new Map();
-  const dn = displayNames();
-  if (dn) {
+  for (const locale of NAME_LOCALES) {
+    let dn: Intl.DisplayNames;
+    try {
+      dn = new Intl.DisplayNames([locale], { type: "region" });
+    } catch {
+      continue; // locale unavailable in this runtime
+    }
     for (let a = 65; a <= 90; a++) {
       for (let b = 65; b <= 90; b++) {
         const code = String.fromCharCode(a) + String.fromCharCode(b);
         if (DEPRECATED_CODES.has(code)) continue;
         try {
           const n = dn.of(code);
-          if (n && n !== code) nameToCode.set(n.toLowerCase(), code);
+          if (!n || n === code) continue;
+          const key = foldName(n);
+          if (!nameToCode.has(key)) nameToCode.set(key, code);
         } catch {
           /* structurally valid but unassigned — skip */
         }
       }
     }
   }
-  for (const [k, v] of Object.entries(NAME_ALIASES)) nameToCode.set(k, v);
+  for (const [k, v] of Object.entries(NAME_ALIASES)) nameToCode.set(foldName(k), v);
   return nameToCode;
 }
 
 export function regionCodeFromName(name: string | null | undefined): string | null {
-  const v = (name ?? "").trim().toLowerCase();
+  const v = foldName(name ?? "");
   if (!v) return null;
   return nameIndex().get(v) ?? null;
 }
@@ -187,4 +251,19 @@ export function regionOptions(): RegionOption[] {
   out.sort((a, b) => a.name.localeCompare(b.name));
   allRegions = out;
   return out;
+}
+
+/**
+ * The code to SEND as an `appStoreRegion` filter: alpha-3 ("USA").
+ *
+ * Production's backend (until the backend team's region release) matches the stored
+ * value exactly, and production users are stored as alpha-3, so "US" found
+ * nobody (15 Oct: US 0 vs USA 8,026). The newer backend expands either form
+ * to both, so alpha-3 is correct on both. Options and saved selections stay
+ * alpha-2; only the query uses this.
+ */
+export function toRegionQueryCode(code: string): string {
+  const alpha2 = toAlpha2(code);
+  if (!alpha2) return code;
+  return regionOptions().find((r) => r.alpha2 === alpha2)?.alpha3 ?? code;
 }

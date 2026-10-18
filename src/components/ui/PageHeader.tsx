@@ -11,7 +11,7 @@ export default function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="mb-6">
+    <div className="app-page-header mb-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-ink">{title}</h1>

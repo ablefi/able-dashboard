@@ -4,6 +4,7 @@ import { useState } from "react";
 import { RefreshCw, Loader2 } from "lucide-react";
 import { toast } from "react-toastify";
 import { cn } from "@/lib/utils";
+import { creatorApi } from "@/lib/creatorMarketClient";
 
 const authHeaders = (): Record<string, string> => {
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
@@ -37,7 +38,7 @@ export function RefreshButton({
     setPending(true);
     const tid = toast.loading(action === "all" ? "Refreshing all creators…" : "Pulling fresh posts…");
     try {
-      const res = await fetch("/api/creators/refresh", {
+      const res = await fetch(creatorApi("/api/creators/refresh"), {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ action, id, windowDays }),
@@ -65,7 +66,7 @@ export function RefreshButton({
       onClick={run}
       disabled={pending}
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-xl border border-jp-blue/30 bg-jp-blue/15 font-medium text-jp-blue-light transition-colors hover:bg-jp-blue/25 disabled:opacity-60",
+        "inline-flex items-center gap-1.5 rounded-xl border border-app-blue/30 bg-app-blue/15 font-medium text-app-blue-light transition-colors hover:bg-app-blue/25 disabled:opacity-60",
         size === "sm" ? "px-2.5 py-1.5 text-xs" : "px-3.5 py-2 text-sm",
       )}
     >

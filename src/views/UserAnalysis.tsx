@@ -8,7 +8,7 @@ import {
 } from "recharts";
 import { Users, RefreshCw, DollarSign, TrendingUp, UserCheck, Loader2, CalendarRange } from "lucide-react";
 import { useUsersApi } from "../api/usersApi";
-import { AnalysisStats, AnalysisRow, mapUserToRow, computeUserAnalysis } from "@/lib/userAnalysis";
+import { AnalysisStats, AnalysisRow, mapUserToRow, computeUserAnalysis, withAiAcquisition } from "@/lib/userAnalysis";
 import { prettyPlace } from "@/lib/countries";
 import { platformLabel } from "@/lib/platform";
 import { CACHE_KEY, runner, subscribeRunner, startAnalysisRun, type FetchUsersFn } from "@/lib/userAnalysisRunner";
@@ -17,15 +17,23 @@ import PageHeader from "@/components/ui/PageHeader";
 import StatCard from "@/components/ui/StatCard";
 import Button from "@/components/ui/Button";
 import Tabs from "@/components/ui/Tabs";
+import { squash } from "@/lib/attribution";
+import { PlacesAndPeople, useAttribution } from "@/components/creators/attribution";
 
 const GRID = "rgba(255,255,255,0.05)";
 const AX = "rgba(255,255,255,0.10)";
 const TICK = "#8499b3";
 const GENDER_COLORS: Record<string, string> = { Male: "#3b82f6", Female: "#ec4899", "N/A": "#64748b" };
 
-// Location pies: top slices get the CVD-validated brand-family set (all-pairs
-// safe on the navy surface); the folded "Other" is deliberately neutral.
-const LOC_COLORS = ["#3b82f6", "#d97706", "#0d9488", "#f43f5e", "#d55181", "#0891b2"];
+// Same single-hue ramp the cancel donut uses. Six unrelated hues is what made
+// these read as a legend rather than a chart; lightness separates just as well
+// and survives colour vision deficiency better. Ordered dark to light so the
+// biggest slice is the heaviest.
+const LOC_COLORS = [
+  "var(--color-cat-6)", "var(--color-cat-5)", "var(--color-cat-4)",
+  "var(--color-cat-3)", "var(--color-cat-2)", "var(--color-cat-1)",
+];
+/** The folded remainder stays deliberately neutral. */
 const OTHER_COLOR = "#64748b";
 /** Top-N categories + an "Other" fold, so the pie never cycles hues. */
 function foldTop(data: { name: string; count: number }[], n = 6): { name: string; value: number }[] {
@@ -39,13 +47,24 @@ const flagPrefix = (name: string) => {
   return f ? `${f} ` : "";
 };
 
-// Brand chart palette + gradient ids (vertical + horizontal variants).
+/**
+ * Bar and line gradients.
+ *
+ * These were five unrelated hues — blue, violet, teal, emerald, cyan — handed
+ * out roughly one per chart. Nothing was encoded by it; a chart wasn't teal
+ * because its data was teal. It just made the page look like five different
+ * products.
+ *
+ * Now they're all the accent family, separated by lightness so the handful of
+ * charts with two series still read apart. Ids are unchanged so no call site
+ * had to move.
+ */
 const PALETTE: { id: string; c: string }[] = [
-  { id: "gBlue", c: "#3b82f6" },
-  { id: "gViolet", c: "#8b5cf6" },
-  { id: "gTeal", c: "#2dd4bf" },
-  { id: "gEmerald", c: "#34d399" },
-  { id: "gCyan", c: "#4fb8e8" },
+  { id: "gBlue", c: "var(--color-cat-4)" },
+  { id: "gViolet", c: "var(--color-cat-2)" },
+  { id: "gTeal", c: "var(--color-cat-5)" },
+  { id: "gEmerald", c: "var(--color-cat-3)" },
+  { id: "gCyan", c: "var(--color-cat-1)" },
 ];
 function Gradients() {
   return (
@@ -71,7 +90,7 @@ function SectionHeader({ title }: { title: string }) {
 }
 function ChartCard({ title, children, className = "" }: { title: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className={`chart-card rounded-xl border border-white/[0.06] bg-jp-navy-card/60 p-5 backdrop-blur-sm ${className}`}>
+    <div className={`chart-card rounded-xl border border-white/[0.06] bg-app-navy-card/60 p-5 backdrop-blur-sm ${className}`}>
       <h3 className="mb-4 text-sm font-semibold text-ink-muted">{title}</h3>
       {children}
     </div>
@@ -80,7 +99,7 @@ function ChartCard({ title, children, className = "" }: { title: string; childre
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-lg border border-white/[0.1] bg-jp-navy-card px-3 py-2 text-sm shadow-xl">
+    <div className="rounded-lg border border-white/[0.1] bg-app-navy-card px-3 py-2 text-sm shadow-xl">
       {label && <div className="mb-1 font-medium text-ink">{label}</div>}
       {payload.map((e: any, i: number) => (
         <div key={i} className="flex items-center gap-2 text-ink-muted">
@@ -95,7 +114,7 @@ function PieTooltip({ active, payload }: any) {
   if (!active || !payload?.length) return null;
   const d = payload[0];
   return (
-    <div className="rounded-lg border border-white/[0.1] bg-jp-navy-card px-3 py-2 text-sm shadow-xl">
+    <div className="rounded-lg border border-white/[0.1] bg-app-navy-card px-3 py-2 text-sm shadow-xl">
       <div className="font-medium text-ink">{d.name}</div>
       <div className="text-ink-muted">{d.value.toLocaleString()}</div>
     </div>
@@ -149,6 +168,8 @@ const UserAnalysis: React.FC = () => {
   const [running, setRunning] = useState(runner.running);
   const [progress, setProgress] = useState<{ fetched: number; total: number | null }>({ fetched: runner.fetched, total: runner.total });
   const [runError, setRunError] = useState<string | null>(runner.error);
+  // Cron-computed, so Places and People render even if nobody has run the crawl.
+  const { data: attribution, loading: attributionLoading } = useAttribution();
   const [partial, setPartial] = useState(!!runner.result?.partial);
 
   // Raw rows behind the analysis. Present → the period filter can re-slice
@@ -233,7 +254,8 @@ const UserAnalysis: React.FC = () => {
   }, [bounds, rows]);
 
   const filtered = bounds !== null && rows !== null;
-  const stats = filtered ? sliced?.stats ?? null : allStats;
+  const baseStats = filtered ? sliced?.stats ?? null : allStats;
+  const stats = useMemo(() => attribution ? withAiAcquisition(baseStats, new Set(attribution.creators.flatMap(c=>c.spellings.map(s=>squash(s.raw))))) : baseStats, [baseStats, attribution]);
   const total = filtered ? sliced?.total ?? 0 : allTotal;
   /** Rows exist, so the period control is live rather than greyed out. */
   const canSlice = rows !== null;
@@ -254,7 +276,7 @@ const UserAnalysis: React.FC = () => {
   const countryPie = foldTop(countryRows);
   const locEmpty = (
     <div className="flex h-[250px] items-center justify-center px-6 text-center text-sm text-ink-faint">
-      No data yet — fills in once the app update ships and users&apos; devices report it.
+      No data yet, fills in once the app update ships and users&apos; devices report it.
     </div>
   );
 
@@ -266,7 +288,7 @@ const UserAnalysis: React.FC = () => {
           running
             ? "Analyzing…"
             : computedAt
-              ? `${total.toLocaleString()} ${filtered ? "signed up in range" : "users"}${partial ? " — PARTIAL" : ""} · refreshed ${timeAgo(computedAt)}`
+              ? `${total.toLocaleString()} ${filtered ? "signed up in range" : "users"}${partial ? ", PARTIAL" : ""} · refreshed ${timeAgo(computedAt)}`
               : "Run an analysis to get started"
         }
         actions={
@@ -278,7 +300,7 @@ const UserAnalysis: React.FC = () => {
       />
 
       {allStats && (
-        <div className="rounded-xl border border-white/[0.06] bg-jp-navy-card/40 px-4 py-3">
+        <div className="rounded-xl border border-white/[0.06] bg-app-navy-card/40 px-4 py-3">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
             <div className="flex items-center gap-2">
               <CalendarRange className="h-4 w-4 text-ink-faint" />
@@ -298,14 +320,14 @@ const UserAnalysis: React.FC = () => {
                   type="date"
                   value={customFrom}
                   onChange={(e) => setCustomFrom(e.target.value)}
-                  className="rounded-lg border border-white/[0.08] bg-jp-navy px-2.5 py-1 text-xs text-ink outline-none focus:border-jp-blue/50"
+                  className="rounded-lg border border-white/[0.08] bg-app-navy px-2.5 py-1 text-xs text-ink outline-none focus:border-app-blue/50"
                 />
                 <span className="text-xs text-ink-faint">to</span>
                 <input
                   type="date"
                   value={customTo}
                   onChange={(e) => setCustomTo(e.target.value)}
-                  className="rounded-lg border border-white/[0.08] bg-jp-navy px-2.5 py-1 text-xs text-ink outline-none focus:border-jp-blue/50"
+                  className="rounded-lg border border-white/[0.08] bg-app-navy px-2.5 py-1 text-xs text-ink outline-none focus:border-app-blue/50"
                 />
               </div>
             )}
@@ -317,8 +339,8 @@ const UserAnalysis: React.FC = () => {
             )}
 
             {!canSlice && !running && (
-              <span className="text-xs text-amber-300/90">
-                Hit Refresh once to enable periods — the last run didn&apos;t keep its raw rows.
+              <span className="text-xs text-app-orange/90">
+                Hit Refresh once to enable periods, the last run didn&apos;t keep its raw rows.
               </span>
             )}
           </div>
@@ -336,12 +358,12 @@ const UserAnalysis: React.FC = () => {
       )}
 
       {running && (
-        <div className="rounded-xl border border-jp-blue/20 bg-jp-blue/[0.06] p-4">
-          <div className="mb-2 flex items-center gap-2 text-sm font-medium text-jp-blue-light">
+        <div className="rounded-xl border border-app-blue/20 bg-app-blue/[0.06] p-4">
+          <div className="mb-2 flex items-center gap-2 text-sm font-medium text-app-blue-light">
             <Loader2 className="h-4 w-4 animate-spin" /> Pulling users from the API…
           </div>
           <div className="h-2 w-full overflow-hidden rounded-full bg-white/[0.06]">
-            <div className="h-full rounded-full bg-jp-blue transition-all duration-300" style={{ width: `${pct}%` }} />
+            <div className="h-full rounded-full bg-app-blue transition-all duration-300" style={{ width: `${pct}%` }} />
           </div>
           <div className="mt-2 text-xs text-ink-muted">
             {progress.fetched.toLocaleString()}{progress.total != null ? ` of ${progress.total.toLocaleString()}` : ""} users
@@ -350,15 +372,15 @@ const UserAnalysis: React.FC = () => {
       )}
 
       {runError && !running && (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-300">
+        <div className="rounded-lg border border-app-orange/30 bg-app-orange/10 px-4 py-2.5 text-sm text-app-orange">
           {runError}
         </div>
       )}
 
       {!stats && !running && (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-white/[0.06] bg-jp-navy-card/40 py-16 text-center">
+        <div className="flex flex-col items-center justify-center rounded-xl border border-white/[0.06] bg-app-navy-card/40 py-16 text-center">
           <Users className="mb-3 h-8 w-8 text-ink-faint" />
-          <p className="text-sm text-ink-muted">No analysis yet — hit Refresh to crunch the latest users.</p>
+          <p className="text-sm text-ink-muted">No analysis yet, hit Refresh to crunch the latest users.</p>
         </div>
       )}
 
@@ -441,7 +463,7 @@ const UserAnalysis: React.FC = () => {
           </div>
 
           {/* Age at signup, month by month. The headline Avg Age blends every
-              cohort, so it can only crawl — this is what actually shows whether
+              cohort, so it can only crawl, this is what actually shows whether
               the people joining are getting older. */}
           {!!stats.ageByCohort?.length && (
             <ChartCard title="Average age at signup, by month joined">
@@ -464,7 +486,7 @@ const UserAnalysis: React.FC = () => {
                 </ComposedChart>
               </ResponsiveContainer>
               <p className="mt-3 text-[11px] leading-relaxed text-ink-faint">
-                Age is asked once at onboarding and never updated, so this is age when they joined — nobody ages
+                Age is asked once at onboarding and never updated, so this is age when they joined, nobody ages
                 in place here. Bars are how many of each month answered; read thin months with that in view.
               </p>
             </ChartCard>
@@ -489,7 +511,7 @@ const UserAnalysis: React.FC = () => {
           <ChartCard title="Conversion & Revenue by Exact Age">
             <div className="max-h-[500px] overflow-y-auto">
               <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-jp-navy-card/95 backdrop-blur-sm">
+                <thead className="sticky top-0 bg-app-navy-card/95 backdrop-blur-sm">
                   <tr className="border-b border-white/[0.06] text-left text-ink-muted">
                     <th className="pb-2 font-medium">Age</th>
                     <th className="pb-2 text-right font-medium">Users</th>
@@ -506,7 +528,7 @@ const UserAnalysis: React.FC = () => {
                       <td className="py-2 font-medium text-ink">{a.age}</td>
                       <td className="py-2 text-right text-ink-muted num">{a.totalCount.toLocaleString()}</td>
                       <td className="py-2 text-right text-ink-muted num">{a.payingCount.toLocaleString()}</td>
-                      <td className={`py-2 text-right num font-medium ${a.rate >= 5 ? "text-amber-300" : "text-ink-muted"}`}>{a.rate.toFixed(1)}%</td>
+                      <td className={`py-2 text-right num font-medium ${a.rate >= 5 ? "text-app-orange" : "text-ink-muted"}`}>{a.rate.toFixed(1)}%</td>
                       <td className="py-2 text-right font-medium text-ink num">${a.totalSpend.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       <td className="py-2 text-right text-ink-muted num">${a.revenuePerDownload.toFixed(2)}</td>
                       <td className="py-2 text-right text-ink-muted num">${a.avgSpend.toFixed(2)}</td>
@@ -517,65 +539,6 @@ const UserAnalysis: React.FC = () => {
             </div>
             <p className="mt-3 text-[11px] text-ink-faint">{stats.convByExactAge.length} distinct ages · Unknown/null-age users excluded. Conversion % highlights amber when ≥5%.</p>
           </ChartCard>
-
-          {/* Prayer Habits */}
-          <SectionHeader title="Prayer Habits" />
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <ChartCard title="Current Daily Prayers Distribution">
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={stats.prayerDistribution}>
-                  <Gradients />
-                  <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
-                  <XAxis dataKey="name" {...axis} />
-                  <YAxis {...axis} />
-                  <Tooltip cursor={{ fill: "rgba(255,255,255,0.03)" }} content={<CustomTooltip />} />
-                  <Bar dataKey="count" name="Users" fill="url(#gTeal)" radius={[6, 6, 0, 0]} maxBarSize={56} />
-                </BarChart>
-              </ResponsiveContainer>
-              <div className="mt-2 text-center text-xs text-ink-faint">{stats.prayerAnalysis.count.toLocaleString()} users with prayer data | Avg: {stats.prayerAnalysis.avgCurrent.toFixed(1)} prayers/day</div>
-            </ChartCard>
-            <ChartCard title="Conversion Rate by Prayer Count">
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={stats.convByPrayer}>
-                  <Gradients />
-                  <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
-                  <XAxis dataKey="name" {...axis} />
-                  <YAxis {...axis} unit="%" />
-                  <Tooltip cursor={{ fill: "rgba(255,255,255,0.03)" }} content={<CustomTooltip />} />
-                  <Bar dataKey="rate" name="Conversion Rate" fill="url(#gViolet)" radius={[6, 6, 0, 0]} maxBarSize={56} />
-                </BarChart>
-              </ResponsiveContainer>
-            </ChartCard>
-          </div>
-
-          {/* Personal Journey */}
-          <SectionHeader title="Personal Journey" />
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <ChartCard title="Journey Distribution">
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={stats.journeyData} layout="vertical">
-                  <Gradients />
-                  <CartesianGrid strokeDasharray="3 3" stroke={GRID} horizontal={false} />
-                  <XAxis type="number" {...axis} />
-                  <YAxis dataKey="name" type="category" {...axis} width={120} />
-                  <Tooltip cursor={{ fill: "rgba(255,255,255,0.03)" }} content={<CustomTooltip />} />
-                  <Bar dataKey="count" name="Users" fill="url(#gEmeraldH)" radius={[0, 6, 6, 0]} maxBarSize={28} />
-                </BarChart>
-              </ResponsiveContainer>
-            </ChartCard>
-            <ChartCard title="Conversion Rate by Journey">
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={stats.convByJourney} layout="vertical">
-                  <Gradients />
-                  <CartesianGrid strokeDasharray="3 3" stroke={GRID} horizontal={false} />
-                  <XAxis type="number" {...axis} unit="%" />
-                  <YAxis dataKey="name" type="category" {...axis} width={120} />
-                  <Tooltip cursor={{ fill: "rgba(255,255,255,0.03)" }} content={<CustomTooltip />} />
-                  <Bar dataKey="rate" name="Conversion Rate" fill="url(#gVioletH)" radius={[0, 6, 6, 0]} maxBarSize={28} />
-                </BarChart>
-              </ResponsiveContainer>
-            </ChartCard>
-          </div>
 
           {/* Acquisition */}
           <SectionHeader title="Acquisition" />
@@ -606,6 +569,16 @@ const UserAnalysis: React.FC = () => {
             </ChartCard>
           </div>
 
+          {/* Places and People.
+              Two questions, not one: WHERE someone found us, and WHO they name.
+              Both come from the same free-text answer, which is why they need
+              the shared resolver — without it "Tiktok", "Tictok" and "On TikTok"
+              read as three different people, and one creator spelled four ways
+              reads as four creators. Computed by cron, so this is a cheap read
+              and does not need the User Analysis crawl to have run. */}
+          <SectionHeader title="Places and People" />
+          <PlacesAndPeople data={attribution} loading={attributionLoading} />
+
           {/* Device platform — active sessions ∪ devices (staging backend only for now) */}
           {(stats.platformData ?? []).length > 0 && (
             <>
@@ -632,8 +605,8 @@ const UserAnalysis: React.FC = () => {
                             {stats.platformCoverage ? ((p.count / stats.platformCoverage) * 100).toFixed(1) : "0.0"}%
                           </td>
                           <td className="py-2 text-right text-ink-muted num">{p.payingCount.toLocaleString()}</td>
-                          <td className="py-2 text-right num font-medium text-jp-blue-light">{p.rate.toFixed(1)}%</td>
-                          <td className="py-2 text-right num text-emerald-400">${p.totalSpend.toFixed(2)}</td>
+                          <td className="py-2 text-right num font-medium text-app-blue-light">{p.rate.toFixed(1)}%</td>
+                          <td className="py-2 text-right num text-app-green">${p.totalSpend.toFixed(2)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -705,7 +678,7 @@ const UserAnalysis: React.FC = () => {
               <>
                 <div className="max-h-[500px] overflow-y-auto">
                   <table className="w-full text-sm">
-                    <thead className="sticky top-0 bg-jp-navy-card/95 backdrop-blur-sm">
+                    <thead className="sticky top-0 bg-app-navy-card/95 backdrop-blur-sm">
                       <tr className="border-b border-white/[0.06] text-left text-ink-muted">
                         <th className="w-12 pb-2 font-medium">Flag</th>
                         <th className="pb-2 font-medium">Country</th>
@@ -720,14 +693,14 @@ const UserAnalysis: React.FC = () => {
                     <tbody>
                       {regionRows.map((r) => (
                         <tr key={r.code} className="border-b border-white/[0.04]">
-                          <td className="py-2 text-lg leading-none">{prettyPlace(r.code).flag || "—"}</td>
+                          <td className="py-2 text-lg leading-none">{prettyPlace(r.code).flag || "-"}</td>
                           <td className="py-2 font-medium text-ink">{prettyPlace(r.code).label || r.code}</td>
                           <td className="py-2 text-right font-mono text-xs text-ink-faint">{r.code}</td>
                           <td className="py-2 text-right text-ink-muted num">{r.count.toLocaleString()}</td>
                           <td className="py-2 text-right text-ink-muted num">{regionCoverage ? ((r.count / regionCoverage) * 100).toFixed(1) : "0.0"}%</td>
                           <td className="py-2 text-right text-ink-muted num">{(r.payingCount ?? 0).toLocaleString()}</td>
-                          <td className="py-2 text-right num font-medium text-jp-blue-light">{(r.rate ?? 0).toFixed(1)}%</td>
-                          <td className="py-2 text-right num text-emerald-400">${(r.totalSpend ?? 0).toFixed(2)}</td>
+                          <td className="py-2 text-right num font-medium text-app-blue-light">{(r.rate ?? 0).toFixed(1)}%</td>
+                          <td className="py-2 text-right num text-app-green">${(r.totalSpend ?? 0).toFixed(2)}</td>
                         </tr>
                       ))}
                     </tbody>

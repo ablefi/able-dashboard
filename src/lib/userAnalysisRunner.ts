@@ -20,8 +20,10 @@ import { saveRows } from "@/lib/analysisRows";
 // render missing fields as zeros (i.e. plausible but WRONG numbers).
 // v2: storeRegionData/userCountryData · v3: per-region paying/rate/spend + convByRegion
 // · v4: platformData/platformCoverage · v6: ageByCohort (and the crawl now
-// keeps its raw rows, which a pre-v6 run never stored).
-export const CACHE_KEY = "user-analysis-cache-v6";
+// keeps its raw rows, which a pre-v6 run never stored) · v7: geoCells for the
+// globe, and the country tallies are now keyed on a resolved alpha-2 rather
+// than the device's own spelling of the country.
+export const CACHE_KEY = "user-analysis-cache-v7";
 
 /** How old a cached analysis may be before the daily auto-refresh re-runs it. */
 export const ANALYSIS_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -103,7 +105,7 @@ export async function startAnalysisRun(fetchUsers: FetchUsersFn) {
       const res = await fetchPageWithRetry(fetchUsers, page, limit);
       if (!res) {
         partial = true;
-        runner.error = `The backend kept failing around page ${page} — showing a partial analysis of ${rows.length.toLocaleString()} users. Hit Refresh to retry.`;
+        runner.error = `The backend kept failing around page ${page}, showing a partial analysis of ${rows.length.toLocaleString()} users. Hit Refresh to retry.`;
         break;
       }
       if (res.meta && typeof res.meta.total === "number") runner.total = res.meta.total;
@@ -117,7 +119,7 @@ export async function startAnalysisRun(fetchUsers: FetchUsersFn) {
         if (shortRetries > 3) {
           res.data.forEach((u) => rows.push(mapUserToRow(u)));
           partial = true;
-          runner.error = `The backend kept returning incomplete pages — showing a partial analysis of ${rows.length.toLocaleString()} users. Hit Refresh to retry.`;
+          runner.error = `The backend kept returning incomplete pages, showing a partial analysis of ${rows.length.toLocaleString()} users. Hit Refresh to retry.`;
           break;
         }
         await sleep(1000 * shortRetries);
@@ -143,9 +145,11 @@ export async function startAnalysisRun(fetchUsers: FetchUsersFn) {
       } catch {
         /* non-fatal */
       }
-      // Also publish the country tally centrally, so the Dashboard globe works
-      // on any machine rather than only where the crawl happened to run. Just
-      // counts per country — no user records. Best-effort; never block the run.
+      // Also publish the map data centrally, so the Dashboard globe works on
+      // any machine rather than only where the crawl happened to run. Counts
+      // per country and per grid cell — no user records, and the cells were
+      // snapped to GRID_DEG when each row was read, so no precise coordinate
+      // is in here. Best-effort; never block the run.
       const countries = computed.stats?.userCountryData;
       if (countries?.length) {
         fetch("/api/user-geo", {
@@ -156,6 +160,13 @@ export async function startAnalysisRun(fetchUsers: FetchUsersFn) {
             paying: computed.stats?.payingCountryData ?? [],
             total: computed.total,
             coverage: computed.stats?.countryCoverage ?? 0,
+            cells: computed.stats?.geoCells ?? [],
+            placed: computed.stats?.geoPlaced ?? 0,
+            placedPaying: computed.stats?.geoPlacedPaying ?? 0,
+            gps: computed.stats?.geoGps ?? 0,
+            gpsPaying: computed.stats?.geoGpsPaying ?? 0,
+            droppedUsers: computed.stats?.geoDroppedUsers ?? 0,
+            payingTotal: computed.stats?.payingCount ?? 0,
           }),
         }).catch(() => {
           /* the globe falls back to the local cache */

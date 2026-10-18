@@ -1,5 +1,5 @@
 /**
- * Creators domain — types + post-counting rules, ported from jp-creators.
+ * Creators domain — types + post-counting rules, ported from roster.
  * Pure (client+server safe); the data fetching lives in supabaseRest and the
  * aggregation in /api/creators.
  */
@@ -7,10 +7,10 @@
 export type Platform = "instagram" | "tiktok" | "youtube";
 export type CreatorType = "influencer" | "daily_ugc" | "youtuber" | "persona" | "ambassador" | "other";
 export type CreatorStatus = "active" | "paused" | "archived";
-export type Responsibility = "adam" | "salma" | "both" | "moving_to_salma";
+export type Responsibility = "owner" | "teammate" | "both" | "moving_to_teammate";
 
-export const JPC_TAG = "jp-creators";
-export const JPP_TAG = "jp-prospect";
+export const ROSTER_TAG = "roster";
+export const PROSPECT_TAG = "prospect";
 
 export interface Creator {
   id: string;
@@ -49,12 +49,12 @@ export interface PostLite {
 
 // ---- responsibility tag (stored as resp:<value> in the tags column) ----
 const RESP_PREFIX = "resp:";
-const RESP_VALUES: Responsibility[] = ["adam", "salma", "both", "moving_to_salma"];
+const RESP_VALUES: Responsibility[] = ["owner", "teammate", "both", "moving_to_teammate"];
 export const RESPONSIBILITY_LABELS: Record<Responsibility, string> = {
-  adam: "Adam",
-  salma: "Salma",
-  both: "Adam + Salma",
-  moving_to_salma: "Moving to Salma",
+  owner: "Owner",
+  teammate: "Teammate",
+  both: "Both",
+  moving_to_teammate: "Moving to teammate",
 };
 export function readResponsibility(tags: string[] | null | undefined): Responsibility | null {
   if (!tags) return null;
@@ -238,6 +238,9 @@ export interface PerformanceStats {
   total_views: number; total_posts: number; total_likes: number; total_comments: number;
   active_creators: number; total_community_posts: number;
   buckets: BucketPoint[]; platform: PlatformAgg[]; top_creators: TopCreator[];
+  /** Total app installs in the same window, from RevenueCat snapshots. Every
+   * source, not only creators — null when the lookup failed. */
+  installs?: number | null;
 }
 export interface PerfPost {
   creator_id: string; platform: Platform; url?: string | null;

@@ -16,13 +16,13 @@ interface AccountLite { id?: string; name: string; profile_image_url: string | n
 /**
  * Persona avatar: composites up to 3 child-account avatars (overlapping)
  * with a +N pill when there are more. Purple initials fallback when the
- * persona has no accounts. Ported from jp-creators' PersonaAvatar.
+ * persona has no accounts. Ported from roster' PersonaAvatar.
  */
 export function PersonaAvatar({ name, size = "md", accounts }: { name: string; size?: AvatarSize; accounts: AccountLite[] }) {
   if (accounts.length === 0) {
     const initials = name.split(/\s+/).map((p) => p[0]?.toUpperCase()).filter(Boolean).slice(0, 2).join("");
     return (
-      <span className={"inline-flex flex-shrink-0 items-center justify-center rounded-full font-semibold text-white ring-1 ring-jp-purple/30 bg-gradient-to-br from-jp-purple to-jp-purple/60 " + SIZES[size]}>
+      <span className={"inline-flex flex-shrink-0 items-center justify-center rounded-full font-semibold text-white ring-1 ring-app-purple/30 bg-gradient-to-br from-app-purple to-app-purple/60 " + SIZES[size]}>
         {initials || "?"}
       </span>
     );
@@ -35,12 +35,12 @@ export function PersonaAvatar({ name, size = "md", accounts }: { name: string; s
   return (
     <div className="inline-flex flex-shrink-0 items-center">
       {visible.map((a, i) => (
-        <div key={a.id ?? i} className={"relative rounded-full ring-2 ring-jp-navy " + (i === 0 ? "" : OVERLAP[size])} style={{ zIndex: visible.length - i }}>
+        <div key={a.id ?? i} className={"relative rounded-full ring-2 ring-app-navy " + (i === 0 ? "" : OVERLAP[size])} style={{ zIndex: visible.length - i }}>
           <CreatorAvatar name={a.name} src={a.profile_image_url} size={size} />
         </div>
       ))}
       {extra > 0 && (
-        <span className={"inline-flex items-center justify-center rounded-full bg-jp-purple/20 font-semibold text-jp-purple ring-2 ring-jp-navy " + SIZES[size] + " " + OVERLAP[size]} style={{ zIndex: 0 }}>
+        <span className={"inline-flex items-center justify-center rounded-full bg-app-purple/20 font-semibold text-app-purple ring-2 ring-app-navy " + SIZES[size] + " " + OVERLAP[size]} style={{ zIndex: 0 }}>
           +{extra}
         </span>
       )}

@@ -8,8 +8,6 @@ import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import Modal from "@/components/ui/Modal";
 
-const JUST_PRAY_ID = "6747154163";
-
 interface Competitor {
   id: string;
   name: string;
@@ -33,6 +31,8 @@ interface Competitor {
 }
 
 interface RankingsData {
+  /** Our own app, pinned to the top of the table. Null until APPLE_APP_ID is set. */
+  ownAppId?: string | null;
   rankings: { appId: string; appName: string; genreId?: number; rankings: { country: { code: string; name: string; flag: string }; rank: number | null }[] }[];
   countries: { code: string; name: string; flag: string }[];
   primaryCount: number;
@@ -71,12 +71,12 @@ function RankBadge({ rank }: { rank: number | null }) {
   if (rank === 1) color = "bg-amber-500/20 text-amber-300 font-bold";
   else if (rank <= 3) color = "bg-amber-500/10 text-amber-300 font-semibold";
   else if (rank <= 10) color = "bg-emerald-500/15 text-emerald-300";
-  else if (rank <= 50) color = "bg-jp-blue/15 text-jp-blue-light";
+  else if (rank <= 50) color = "bg-app-blue/15 text-app-blue-light";
   return <span className={`inline-flex min-w-[2.5rem] items-center justify-center rounded-md px-2 py-1 text-sm num ${color}`}>#{rank}</span>;
 }
 
 const inputCls =
-  "mt-1 w-full rounded-lg border border-white/[0.08] bg-jp-navy-light/60 px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-jp-blue/45 focus:outline-none";
+  "mt-1 w-full rounded-lg border border-white/[0.08] bg-app-navy-light/60 px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-app-blue/45 focus:outline-none";
 
 const emptyForm = { name: "", app_store_id: "", instagram_handle: "", tiktok_handle: "", youtube_handle: "", website: "", notes: "" };
 
@@ -178,7 +178,7 @@ export default function Competitors() {
   };
 
   const sortedRankings = rankingsData?.rankings
-    ? [...rankingsData.rankings.filter((r) => r.appId === JUST_PRAY_ID), ...rankingsData.rankings.filter((r) => r.appId !== JUST_PRAY_ID)]
+    ? [...rankingsData.rankings.filter((r) => r.appId === rankingsData.ownAppId), ...rankingsData.rankings.filter((r) => r.appId !== rankingsData.ownAppId)]
     : [];
 
   if (loading) {
@@ -207,16 +207,16 @@ export default function Competitors() {
         }
       />
 
-      {error && <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-300">{error}</div>}
+      {error && <div className="rounded-lg border border-app-red/30 bg-app-red/10 px-4 py-2.5 text-sm text-app-red-text">{error}</div>}
 
       {showAdd && (
-        <div className="space-y-4 rounded-xl border border-white/[0.06] bg-jp-navy-card/60 p-5 backdrop-blur-sm">
+        <div className="space-y-4 rounded-xl border border-white/[0.06] bg-app-navy-card/60 p-5 backdrop-blur-sm">
           <h3 className="text-sm font-semibold text-ink">New Competitor</h3>
           <div className="grid grid-cols-2 gap-4">
             {(
               [
                 ["name", "Name *", "App name"],
-                ["app_store_id", "App Store ID", "e.g. 6747154163"],
+                ["app_store_id", "App Store ID", "e.g. 1234567890"],
                 ["website", "Website", "https://example.com"],
                 ["instagram_handle", "Instagram", "username"],
                 ["tiktok_handle", "TikTok", "username"],
@@ -239,13 +239,13 @@ export default function Competitors() {
       )}
 
       {/* Rankings table — loads from cache instantly */}
-      <div className="overflow-hidden rounded-xl border border-white/[0.06] bg-jp-navy-card/40">
+      <div className="overflow-hidden rounded-xl border border-white/[0.06] bg-app-navy-card/40">
         {rankingsData && sortedRankings.length > 0 && (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-white/[0.06]">
-                  <th className="sticky left-0 z-10 bg-jp-navy px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-ink-faint">App</th>
+                  <th className="sticky left-0 z-10 bg-app-navy px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-ink-faint">App</th>
                   {rankingsData.countries.map((c, idx) => (
                     <th key={c.code} className={`px-3 py-3 text-center text-xs text-ink-muted ${idx === rankingsData.primaryCount ? "border-l-2 border-white/[0.10]" : ""}`} title={c.name}>
                       <div className="flex flex-col items-center gap-0.5">
@@ -258,21 +258,21 @@ export default function Competitors() {
               </thead>
               <tbody>
                 {sortedRankings.map((app) => {
-                  const isJP = app.appId === JUST_PRAY_ID;
+                  const isOwn = !!rankingsData?.ownAppId && app.appId === rankingsData.ownAppId;
                   const comp = competitors.find((c) => c.app_store_id === app.appId);
                   return (
-                    <tr key={app.appId} className={isJP ? "bg-jp-blue/[0.08]" : ""}>
-                      <td className={`sticky left-0 z-10 px-5 py-3 ${isJP ? "bg-emerald-50" : "bg-white"}`}>
+                    <tr key={app.appId} className={isOwn ? "bg-app-blue/[0.08]" : ""}>
+                      <td className={`sticky left-0 z-10 px-5 py-3 ${isOwn ? "bg-app-navy-light" : "bg-app-navy"}`}>
                         <div className="flex items-center gap-3">
-                          {comp?.app_icon_url || isJP ? (
+                          {comp?.app_icon_url || isOwn ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={isJP ? "/icon-200.png" : comp!.app_icon_url!} alt="" className="h-9 w-9 shrink-0 rounded-lg" referrerPolicy="no-referrer" />
+                            <img src={isOwn ? "/icon-200.png" : comp!.app_icon_url!} alt="" className="h-9 w-9 shrink-0 rounded-lg" referrerPolicy="no-referrer" />
                           ) : (
                             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/[0.04] text-sm font-semibold text-ink-muted">
                               {app.appName.charAt(0)}
                             </div>
                           )}
-                          <span className={`whitespace-nowrap text-sm font-medium ${isJP ? "font-semibold text-jp-blue-light" : "text-ink"}`}>{app.appName}</span>
+                          <span className={`whitespace-nowrap text-sm font-medium ${isOwn ? "font-semibold text-app-blue-light" : "text-ink"}`}>{app.appName}</span>
                         </div>
                       </td>
                       {app.rankings.map((r, idx) => (
@@ -294,7 +294,7 @@ export default function Competitors() {
           </div>
         )}
         {!rankingsData && !rankingsLoading && (
-          <div className="flex items-center justify-center py-12 text-sm text-ink-faint">Hit &quot;Refresh Rankings&quot; — results are cached after the first run.</div>
+          <div className="flex items-center justify-center py-12 text-sm text-ink-faint">Hit &quot;Refresh Rankings&quot;. Results are cached after the first run.</div>
         )}
       </div>
 
@@ -307,10 +307,10 @@ export default function Competitors() {
       {showCards && (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {competitors.map((c) => (
-            <div key={c.id} className="relative rounded-xl border border-white/[0.06] bg-jp-navy-card/60 p-5 backdrop-blur-sm">
+            <div key={c.id} className="relative rounded-xl border border-white/[0.06] bg-app-navy-card/60 p-5 backdrop-blur-sm">
               <button
                 onClick={() => setDeleteTarget(c)}
-                className="absolute right-3 top-3 rounded-lg p-1.5 text-ink-faint transition-colors hover:bg-rose-500/10 hover:text-rose-300"
+                className="absolute right-3 top-3 rounded-lg p-1.5 text-ink-faint transition-colors hover:bg-app-red/10 hover:text-app-red-text"
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
@@ -319,7 +319,7 @@ export default function Competitors() {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={c.app_icon_url} alt="" className="h-12 w-12 rounded-xl" referrerPolicy="no-referrer" />
                 ) : (
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-jp-blue/15 text-lg font-semibold text-jp-blue-light">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-app-blue/15 text-lg font-semibold text-app-blue-light">
                     {c.name.charAt(0).toUpperCase()}
                   </div>
                 )}
@@ -327,7 +327,7 @@ export default function Competitors() {
                   <h3 className="truncate text-base font-semibold text-ink">{c.name}</h3>
                   {c.app_store_id && <span className="text-xs text-ink-faint">ID: {c.app_store_id}</span>}
                   {c.website && (
-                    <a href={c.website.startsWith("http") ? c.website : `https://${c.website}`} target="_blank" rel="noopener noreferrer" className="mt-0.5 flex items-center gap-1 text-xs text-jp-blue-light hover:underline">
+                    <a href={c.website.startsWith("http") ? c.website : `https://${c.website}`} target="_blank" rel="noopener noreferrer" className="mt-0.5 flex items-center gap-1 text-xs text-app-blue-light hover:underline">
                       <Globe className="h-3 w-3" />
                       {c.website.replace(/^https?:\/\//, "")}
                     </a>
@@ -355,7 +355,7 @@ export default function Competitors() {
           ))}
           {competitors.length === 0 && (
             <div className="col-span-full flex h-40 items-center justify-center rounded-xl border border-dashed border-white/[0.08] text-sm text-ink-faint">
-              No competitors yet — add your first above.
+              No competitors yet. Add your first above.
             </div>
           )}
         </div>

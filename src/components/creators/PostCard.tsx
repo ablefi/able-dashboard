@@ -7,6 +7,7 @@ import { postCounts, type CreatorType } from "@/lib/creators";
 import { PlatformBadge } from "./PlatformBadge";
 import { PostActions, OutlierToggle } from "./PostActions";
 import { ExpandableCaption, Sparkline, thumbUrl, fmtCompact, fmtRelative } from "./PostBits";
+import { useCreatorSection } from "@/lib/creatorMarketClient";
 
 export interface CardPost {
   id: string;
@@ -26,7 +27,7 @@ export interface CardPost {
 }
 
 /**
- * Post card — ported from jp-creators' creator-detail PostCard. Thumbnail
+ * Post card — ported from roster' creator-detail PostCard. Thumbnail
  * with PlatformBadge overlay (top-left) + OutlierToggle (top-right),
  * "Excluded / Not counted" veil, expandable caption, views/likes/comments,
  * cyan view-history sparkline, and the teal/rose PostActions row.
@@ -49,6 +50,7 @@ export function PostCard({
   /** Bubbles up after approve/exclude/outlier so the page recomputes totals. */
   onChanged?: () => void;
 }) {
+  const { base: creatorsBase } = useCreatorSection();
   const [thumbErr, setThumbErr] = useState(false);
   const counted = postCounts(creatorType, post);
   const series = (post.series ?? []).map((s) => s.view_count);
@@ -59,18 +61,18 @@ export function PostCard({
   return (
     <div
       className={
-        "overflow-hidden rounded-xl border border-white/[0.06] bg-jp-navy-card/40 transition-all hover:-translate-y-0.5 hover:border-jp-blue/25 hover:shadow-[0_8px_24px_-12px_rgba(59,130,246,0.35)] " +
-        (post.is_outlier ? "ring-1 ring-jp-gold/30" : "")
+        "overflow-hidden rounded-xl border border-white/[0.06] bg-app-navy-card/40 transition-all hover:-translate-y-0.5 hover:border-app-blue/25 hover:shadow-[0_8px_24px_-12px_rgba(59,130,246,0.35)] " +
+        (post.is_outlier ? "ring-1 ring-app-gold/30" : "")
       }
     >
-      <div className={"relative bg-jp-navy-light/40 " + mediaAspect}>
+      <div className={"relative bg-app-navy-light/40 " + mediaAspect}>
         <a href={post.url} target="_blank" rel="noopener noreferrer" className="block h-full w-full" aria-label="Open post on its platform">
           {tUrl && !thumbErr ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={tUrl} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" loading="lazy" decoding="async" onError={() => setThumbErr(true)} />
           ) : null}
           {!counted && (
-            <div className="absolute inset-0 flex items-center justify-center bg-jp-navy/80 text-[10px] uppercase tracking-wider text-ink-muted">
+            <div className="absolute inset-0 flex items-center justify-center bg-app-navy/80 text-[10px] uppercase tracking-wider text-ink-muted">
               {post.excluded ? "Excluded" : "Not counted"}
             </div>
           )}
@@ -83,7 +85,7 @@ export function PostCard({
 
       <div className="p-2.5">
         {attribution && (
-          <Link href={`/creators/${attribution.slug}`} className="mb-1 inline-block truncate text-[10px] text-ink-muted hover:text-ink">
+          <Link href={`${creatorsBase}/${attribution.slug}`} className="mb-1 inline-block truncate text-[10px] text-ink-muted hover:text-ink">
             {attribution.name} →
           </Link>
         )}
@@ -96,14 +98,14 @@ export function PostCard({
         </div>
 
         {series.length > 1 && (
-          <div className="mt-2 text-jp-cyan">
-            <Sparkline values={series} className="text-jp-cyan" height={18} />
+          <div className="mt-2 text-app-cyan">
+            <Sparkline values={series} className="text-app-cyan" height={18} />
           </div>
         )}
 
         <div className="mt-2 text-[10px] text-ink-faint">{fmtRelative(post.posted_at)}</div>
 
-        <div className="mt-2 border-t border-jp-blue/10 pt-2">
+        <div className="mt-2 border-t border-app-blue/10 pt-2">
           <PostActions
             postId={post.id}
             initialApproved={post.approved}

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth";
+import { requireCreatorsSession } from "@/lib/creatorMarket";
 
 /**
  * ScrapeCreators handle search — TikTok user + YouTube channel search in
@@ -13,7 +14,7 @@ const SC_BASE = "https://api.scrapecreators.com";
 interface SearchResult { platform: "tiktok" | "youtube"; handle: string; name: string; followers?: number; avatarUrl?: string }
 
 export async function GET(req: NextRequest) {
-  const guard = await requireSession(req, "creators");
+  const guard = await requireCreatorsSession(req);
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
   const apiKey = process.env.SCRAPECREATORS_API_KEY;

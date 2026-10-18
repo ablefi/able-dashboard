@@ -68,14 +68,14 @@ export default function MultiSelect({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex min-h-9 w-full items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-left text-sm text-ink transition-colors hover:border-slate-300"
+        className="flex min-h-9 w-full items-center gap-2 rounded-xl border border-white/[0.12] bg-app-navy-card/60 px-3 py-1.5 text-left text-sm text-ink transition-colors hover:border-white/[0.22]"
       >
         <span className="flex flex-1 flex-wrap items-center gap-1">
           {value.length === 0 && <span className="text-ink-faint">{placeholder}</span>}
           {chips.map((v) => (
             <span
               key={v}
-              className="inline-flex items-center gap-1 rounded-md bg-jp-blue/15 px-1.5 py-0.5 text-xs text-jp-blue-light"
+              className="inline-flex items-center gap-1 rounded-md bg-app-blue/15 px-1.5 py-0.5 text-xs text-app-blue-light"
             >
               {byValue.get(v)?.label ?? v}
               <span
@@ -86,7 +86,7 @@ export default function MultiSelect({
                   e.stopPropagation();
                   onChange(value.filter((x) => x !== v));
                 }}
-                className="cursor-pointer text-jp-blue-light/60 hover:text-jp-blue-light"
+                className="cursor-pointer text-app-blue-light/60 hover:text-app-blue-light"
               >
                 <X className="h-3 w-3" />
               </span>
@@ -98,14 +98,14 @@ export default function MultiSelect({
       </button>
 
       {open && (
-        <div className="absolute z-30 mt-1 w-full overflow-hidden rounded-xl border border-white/[0.1] bg-jp-navy-card shadow-2xl shadow-black/50">
+        <div className="absolute z-30 mt-1 w-full overflow-hidden rounded-xl border border-white/[0.1] bg-app-navy-card shadow-2xl shadow-black/50">
           <div className="border-b border-white/[0.06] p-2">
             <input
               autoFocus
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder={searchPlaceholder}
-              className="w-full rounded-lg border border-white/[0.1] bg-jp-navy/60 px-2.5 py-1.5 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-jp-blue/50"
+              className="w-full rounded-lg border border-white/[0.1] bg-app-navy/60 px-2.5 py-1.5 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-app-blue/50"
             />
           </div>
           <div className="max-h-56 overflow-y-auto py-1">
@@ -122,7 +122,7 @@ export default function MultiSelect({
                   <span
                     className={cn(
                       "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
-                      on ? "border-jp-blue bg-jp-blue text-white" : "border-white/25"
+                      on ? "border-app-blue bg-app-blue text-white" : "border-white/25"
                     )}
                   >
                     {on && <Check className="h-3 w-3" />}

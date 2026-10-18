@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Check, Loader2, Star, X } from "lucide-react";
+import { creatorApi } from "@/lib/creatorMarketClient";
 
 const authHeaders = (): Record<string, string> => {
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
@@ -10,16 +11,16 @@ const authHeaders = (): Record<string, string> => {
 
 async function patchPost(id: string, field: "approved" | "excluded" | "is_outlier", value: boolean) {
   try {
-    await fetch("/api/creators/posts", {
+    await fetch(creatorApi("/api/creators/posts"), {
       method: "PATCH",
       headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ id, field, value }),
     });
     // Starring auto-archives the video (download → top-videos bucket) so it's
     // ready to publish to /topvideos. Fire-and-forget; the Outliers tab shows
-    // archive status + the Publish toggle. Mirrors jp-creators' OutlierToggle.
+    // archive status + the Publish toggle. Mirrors roster' OutlierToggle.
     if (field === "is_outlier" && value) {
-      fetch("/api/creators/outliers", {
+      fetch(creatorApi("/api/creators/outliers"), {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ action: "archive", id }),
@@ -31,7 +32,7 @@ async function patchPost(id: string, field: "approved" | "excluded" | "is_outlie
 }
 
 /**
- * Approve / Exclude toggles for a post — ported from jp-creators.
+ * Approve / Exclude toggles for a post — ported from roster.
  * Approved = teal-green, Excluded = rose-red, instant optimistic flip.
  *
  * Layouts: "stack" (vertical, posts feed) | "row" (horizontal, post cards).
@@ -100,8 +101,8 @@ export function PostActions({
           className={
             btnCls +
             (approved
-              ? "bg-jp-teal/20 text-jp-teal ring-1 ring-inset ring-jp-teal/40 hover:bg-jp-teal/25"
-              : "bg-jp-navy-light/60 text-ink ring-1 ring-inset ring-jp-blue/15 hover:bg-jp-navy-light hover:ring-jp-blue/35")
+              ? "bg-app-teal/20 text-app-teal ring-1 ring-inset ring-app-teal/40 hover:bg-app-teal/25"
+              : "bg-app-navy-light/60 text-ink ring-1 ring-inset ring-app-blue/15 hover:bg-app-navy-light hover:ring-app-blue/35")
           }
         >
           {approved && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
@@ -114,8 +115,8 @@ export function PostActions({
         className={
           btnCls +
           (excluded
-            ? "bg-rose-500/20 text-rose-300 ring-1 ring-inset ring-rose-500/40 hover:bg-rose-500/25"
-            : "bg-transparent text-ink-muted ring-1 ring-inset ring-jp-blue/10 hover:bg-white/[0.03] hover:text-ink hover:ring-jp-blue/25")
+            ? "bg-app-red/20 text-app-red-text ring-1 ring-inset ring-app-red/40 hover:bg-app-red/25"
+            : "bg-transparent text-ink-muted ring-1 ring-inset ring-app-blue/10 hover:bg-white/[0.03] hover:text-ink hover:ring-app-blue/25")
         }
       >
         {excluded && <X className="h-3.5 w-3.5" strokeWidth={3} />}
@@ -131,11 +132,11 @@ export function PostActions({
           className={
             "inline-flex w-9 items-center justify-center rounded-xl px-2 py-2 text-xs font-semibold transition-colors flex-shrink-0 " +
             (outlier
-              ? "bg-jp-gold/20 text-jp-gold ring-1 ring-inset ring-jp-gold/40 hover:bg-jp-gold/25"
-              : "bg-transparent text-ink-muted ring-1 ring-inset ring-jp-blue/10 hover:bg-white/[0.03] hover:text-jp-gold hover:ring-jp-gold/30")
+              ? "bg-app-gold/20 text-app-gold ring-1 ring-inset ring-app-gold/40 hover:bg-app-gold/25"
+              : "bg-transparent text-ink-muted ring-1 ring-inset ring-app-blue/10 hover:bg-white/[0.03] hover:text-app-gold hover:ring-app-gold/30")
           }
         >
-          <Star className={"h-3.5 w-3.5 " + (outlier ? "fill-jp-gold" : "")} strokeWidth={2} />
+          <Star className={"h-3.5 w-3.5 " + (outlier ? "fill-app-gold" : "")} strokeWidth={2} />
         </button>
       )}
     </div>
@@ -170,8 +171,8 @@ export function OutlierToggle({ postId, initialOutlier, onChanged }: { postId: s
       className={
         "absolute right-1.5 top-1.5 z-10 inline-flex h-7 w-7 items-center justify-center rounded-full backdrop-blur-md transition-all " +
         (outlier
-          ? "bg-jp-gold/95 text-jp-navy shadow-md shadow-jp-gold/40 hover:bg-jp-gold"
-          : "bg-black/40 text-white/85 ring-1 ring-white/15 hover:bg-black/60 hover:text-jp-gold hover:ring-jp-gold/40")
+          ? "bg-app-gold/95 text-app-navy shadow-md shadow-app-gold/40 hover:bg-app-gold"
+          : "bg-black/40 text-white/85 ring-1 ring-white/15 hover:bg-black/60 hover:text-app-gold hover:ring-app-gold/40")
       }
     >
       {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Star className={"h-3.5 w-3.5 " + (outlier ? "fill-current" : "")} strokeWidth={2} />}

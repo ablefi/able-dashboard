@@ -16,7 +16,7 @@ import type { AnalysisRow } from "@/lib/userAnalysis";
  * the cached all-time analysis still renders — it never breaks the page.
  */
 
-const DB_NAME = "jp-user-analysis";
+const DB_NAME = "app-user-analysis";
 const STORE = "rows";
 const KEY = "latest";
 

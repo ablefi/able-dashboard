@@ -5,7 +5,9 @@ import { Loader2, Search, Plus } from "lucide-react";
 import { toast } from "react-toastify";
 import Modal from "@/components/ui/Modal";
 import Button from "@/components/ui/Button";
+import FormSection from "@/components/ui/FormSection";
 import { cn } from "@/lib/utils";
+import { creatorApi } from "@/lib/creatorMarketClient";
 
 const authHeaders = (): Record<string, string> => {
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
@@ -24,7 +26,7 @@ export interface CreatorFormValues {
 
 interface SearchHit { platform: "tiktok" | "youtube"; handle: string; name: string; followers?: number; avatarUrl?: string }
 
-const inputCls = "w-full rounded-lg border border-white/[0.08] bg-jp-navy-light/60 px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-jp-blue/45 focus:outline-none";
+const inputCls = "w-full rounded-lg border border-white/[0.08] bg-app-navy-light/60 px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-app-blue/45 focus:outline-none";
 const labelCls = "mb-1 block text-xs font-medium text-ink-muted";
 
 /**
@@ -79,7 +81,7 @@ export default function CreatorFormModal({
     debRef.current = setTimeout(async () => {
       setSearching(true);
       try {
-        const r = await fetch(`/api/creators/search?q=${encodeURIComponent(q.trim())}`, { headers: authHeaders() });
+        const r = await fetch(creatorApi(`/api/creators/search?q=${encodeURIComponent(q.trim())}`), { headers: authHeaders() });
         const d = await r.json();
         setHits(d.results ?? []);
       } catch { setHits([]); } finally { setSearching(false); }
@@ -101,7 +103,7 @@ export default function CreatorFormModal({
     if (!isPersona && !ig.trim() && !tt.trim() && !yt.trim()) { toast.error("At least one handle is required"); return; }
     setSaving(true);
     try {
-      const endpoint = kind === "creator" ? "/api/creators/manage" : "/api/prospects";
+      const endpoint = creatorApi(kind === "creator" ? "/api/creators/manage" : "/api/prospects");
       const body: Record<string, unknown> = {
         action: editing ? "update" : "create",
         id: initial?.id,
@@ -138,7 +140,8 @@ export default function CreatorFormModal({
         </>
       }
     >
-      <div className="space-y-3">
+      <div className="flex flex-col gap-5">
+        <FormSection title="Find an account">
         {/* SC search */}
         <div>
           <label className={labelCls}>Search TikTok / YouTube (autofills handle)</label>
@@ -148,11 +151,11 @@ export default function CreatorFormModal({
             {searching && <Loader2 className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-ink-faint" />}
           </div>
           {hits.length > 0 && (
-            <ul className="mt-1 max-h-44 overflow-y-auto rounded-lg border border-white/[0.08] bg-jp-navy">
+            <ul className="mt-1 max-h-44 overflow-y-auto rounded-lg border border-white/[0.08] bg-app-navy">
               {hits.map((h, i) => (
                 <li key={i}>
                   <button onClick={() => applyHit(h)} className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs text-ink-muted transition-colors hover:bg-white/[0.04] hover:text-ink">
-                    <span className={cn("rounded px-1 py-0.5 text-[9px] font-semibold", h.platform === "tiktok" ? "bg-jp-cyan/15 text-jp-cyan" : "bg-red-500/15 text-red-400")}>{h.platform === "tiktok" ? "TT" : "YT"}</span>
+                    <span className={cn("rounded px-1 py-0.5 text-[9px] font-semibold", h.platform === "tiktok" ? "bg-app-cyan/15 text-app-cyan" : "bg-red-500/15 text-red-400")}>{h.platform === "tiktok" ? "TT" : "YT"}</span>
                     <span className="font-medium text-ink">{h.name}</span>
                     <span className="text-ink-faint">@{h.handle}</span>
                     {h.followers != null && <span className="ml-auto text-ink-faint">{h.followers >= 1000 ? `${(h.followers / 1000).toFixed(0)}K` : h.followers}</span>}
@@ -161,11 +164,13 @@ export default function CreatorFormModal({
               ))}
             </ul>
           )}
-          <p className="mt-1 text-[10px] text-ink-faint">Instagram has no search API — type the IG handle manually.</p>
+          <p className="mt-1 text-[10px] text-ink-faint">Instagram has no search API, type the IG handle manually.</p>
         </div>
 
+        </FormSection>
+        <FormSection title="Profile">
         <div>
-          <label className={labelCls}>Name <span className="text-rose-400">*</span></label>
+          <label className={labelCls}>Name <span className="text-app-red-text">*</span></label>
           <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} placeholder="Display name" />
         </div>
 
@@ -182,9 +187,9 @@ export default function CreatorFormModal({
             </div>
             {!isPersona && (personas?.length ?? 0) > 0 && (
               <div>
-                <label className={labelCls}>Parent persona (optional)</label>
+                <label className={labelCls}>Parent persona (optional — includes YouTubers)</label>
                 <select className={inputCls} value={parentId} onChange={(e) => setParentId(e.target.value)}>
-                  <option value="">— none —</option>
+                  <option value="">- none -</option>
                   {personas!.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
               </div>
@@ -192,14 +197,17 @@ export default function CreatorFormModal({
           </div>
         )}
 
+        </FormSection>
         {!isPersona && (
-          <div className="grid grid-cols-3 gap-3">
+          <FormSection title="Social accounts">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div><label className={labelCls}>Instagram</label><input className={inputCls} value={ig} onChange={(e) => setIg(e.target.value)} placeholder="handle" /></div>
             <div><label className={labelCls}>TikTok</label><input className={inputCls} value={tt} onChange={(e) => setTt(e.target.value)} placeholder="handle" /></div>
             <div><label className={labelCls}>YouTube</label><input className={inputCls} value={yt} onChange={(e) => setYt(e.target.value)} placeholder="handle" /></div>
           </div>
+          </FormSection>
         )}
-        {isPersona && <p className="text-xs text-ink-faint">Personas have no handles of their own — add child accounts after creating it.</p>}
+        {isPersona && <p className="text-xs text-ink-faint">Personas have no handles of their own, add child accounts after creating it.</p>}
       </div>
     </Modal>
   );
@@ -207,8 +215,8 @@ export default function CreatorFormModal({
 
 /** Fire the post + avatar pull for a freshly created/edited creator (client-side, reliable). */
 export function triggerAutoPull(id: string) {
-  fetch("/api/creators/refresh", { method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() }, body: JSON.stringify({ action: "creator", id }) }).catch(() => {});
-  fetch("/api/creators/profile", { method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() }, body: JSON.stringify({ action: "profile", id }) }).catch(() => {});
+  fetch(creatorApi("/api/creators/refresh"), { method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() }, body: JSON.stringify({ action: "creator", id }) }).catch(() => {});
+  fetch(creatorApi("/api/creators/profile"), { method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() }, body: JSON.stringify({ action: "profile", id }) }).catch(() => {});
 }
 
 export { Plus };

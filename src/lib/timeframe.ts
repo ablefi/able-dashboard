@@ -1,5 +1,5 @@
 /**
- * Timeframe model for the Creators screens — ported from jp-creators'
+ * Timeframe model for the Creators screens — ported from roster'
  * lib/timeframe. The admin views are client-fetching components, so instead
  * of URL params the filter holds a `Timeframe` value in state and
  * `resolveTimeframe` turns it into the fromISO/toISO pair for API calls.
@@ -86,7 +86,7 @@ export function resolveTimeframe(tf: Timeframe): ParsedTimeframe {
     const fm = isFullMonth(tf.from, tf.to);
     const label = fm
       ? new Date(Date.UTC(fm.year, fm.month - 1, 1)).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" })
-      : `${tf.from} – ${tf.to}`;
+      : `${tf.from}, ${tf.to}`;
     return { fromISO: from.toISOString(), toISO: to.toISOString(), label };
   }
   const key = TIMEFRAME_PRESETS.some((p) => p.key === tf.key) ? tf.key : "30d";

@@ -9,7 +9,7 @@ interface StatCardProps {
   icon?: LucideIcon;
 }
 
-/** Headline stat card for the light Able Ops surface. */
+/** Headline stat card — big number, soft border, thin blue gradient hairline. */
 export default function StatCard({
   label,
   value,
@@ -18,8 +18,8 @@ export default function StatCard({
   icon: Icon,
 }: StatCardProps) {
   return (
-    <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition-colors hover:border-jp-blue/30">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-jp-blue/30 to-transparent" />
+    <div className="app-stat relative overflow-hidden rounded-xl border border-white/[0.06] bg-app-navy-card/60 p-6 backdrop-blur-sm transition-colors hover:border-app-blue/20">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-app-blue/40 to-transparent" />
       <div className="flex items-center justify-between">
         <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-faint">
           {label}
@@ -32,8 +32,8 @@ export default function StatCard({
       {change && (
         <div
           className={cn("mt-3 text-xs font-medium", {
-            "text-emerald-400": changeType === "up",
-            "text-rose-400": changeType === "down",
+            "text-app-green": changeType === "up",
+            "text-app-red-text": changeType === "down",
             "text-ink-faint": changeType === "neutral",
           })}
         >

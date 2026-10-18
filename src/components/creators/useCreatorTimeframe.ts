@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Timeframe } from "@/lib/timeframe";
 
-const KEY = "jp-creators-timeframe";
-const EVT = "jp-creators-tf";
+const KEY = "roster-timeframe";
+const EVT = "roster-tf";
 const DEFAULT: Timeframe = { key: "30d" };
 
 function read(): Timeframe {

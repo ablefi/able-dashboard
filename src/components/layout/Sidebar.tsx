@@ -2,8 +2,16 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
+import { BRAND } from "@/lib/brand";
+import StagingBadge from "@/components/StagingBadge";
+import ChangePasswordButton from "@/components/ChangePasswordButton";
+import { canSeeSection, hasPermission, type AdminSession } from "@/lib/permissions";
+import { useAuth } from "@/context/AuthContext";
 import { usePathname } from "next/navigation";
+import { NAV, SECTION_IDS, activeHrefFor, type Section, visibleNav } from "@/lib/nav";
 import {
+  LogOut,
   LayoutDashboard,
   LayoutGrid,
   Users,
@@ -17,13 +25,14 @@ import {
   Users2,
   Link2,
   Mail,
-  Video,
+  MessageSquare,
   UserSearch,
   DollarSign,
   Landmark,
   Receipt,
   Globe,
   Crosshair,
+  ShieldCheck,
   BarChart3,
   FileText,
   Star,
@@ -35,125 +44,35 @@ import {
   Send,
   Bell,
   RectangleHorizontal,
+  Smartphone,
   ChevronDown,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
 
-type Item = { href: string; label: string; icon: typeof Users };
-type TopItem = Item & { kind: "item"; exact?: boolean };
-type Section = { kind: "section"; id: string; label: string; icon: typeof Users; items: Item[] };
-type Node = TopItem | Section;
 
-const NAV: Node[] = [
-  { kind: "item", href: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
-  {
-    kind: "section",
-    id: "users",
-    label: "Users",
-    icon: Users,
-    items: [
-      { href: "/users", label: "Users", icon: Users },
-      { href: "/user-analysis", label: "User Analysis", icon: BarChart3 },
-    ],
-  },
-  {
-    kind: "section",
-    id: "financials",
-    label: "Revenue",
-    icon: DollarSign,
-    items: [
-      { href: "/revenue", label: "Revenue Analytics", icon: BarChart3 },
-    ],
-  },
-  {
-    kind: "section",
-    id: "creators",
-    label: "Creators",
-    icon: Users2,
-    items: [
-      { href: "/creators", label: "Roster", icon: Users2 },
-      { href: "/creators/posts", label: "Posts", icon: FileText },
-      { href: "/creators/calendar", label: "Calendar", icon: CalendarDays },
-      { href: "/creators/performance", label: "Performance", icon: BarChart3 },
-      { href: "/creators/performance-all", label: "GCP", icon: BadgeCheck },
-      { href: "/creators/outliers", label: "Outliers", icon: Star },
-    ],
-  },
-  {
-    kind: "section",
-    id: "referral",
-    label: "Referral Codes",
-    icon: Gift,
-    items: [
-      { href: "/referral-codes", label: "Codes", icon: Gift },
-      { href: "/referral-codes/analytics", label: "Code Analytics", icon: BarChart3 },
-    ],
-  },
-  {
-    kind: "section",
-    id: "content",
-    label: "Content",
-    icon: FileText,
-    items: [
-      { href: "/content/own-posts", label: "Our Posts", icon: LayoutGrid },
-    ],
-  },
-  {
-    kind: "section",
-    id: "social",
-    label: "Social",
-    icon: Share2,
-    items: [
-      { href: "/links", label: "Links", icon: Link2 },
-      { href: "/website", label: "Website Analytics", icon: Globe },
-    ],
-  },
-  {
-    kind: "section",
-    id: "research",
-    label: "Research",
-    icon: Crosshair,
-    items: [
-      { href: "/competitors", label: "Competitors", icon: Crosshair },
-      { href: "/prospects", label: "Prospects", icon: UserSearch },
-    ],
-  },
-];
 
 // Every nav href, used to pick the single best (longest) match for the
 // current path so e.g. /referral-codes/analytics highlights Analytics (not
 // Codes), while /referral-codes/<id> highlights Codes.
-const ALL_HREFS = NAV.flatMap((n) => (n.kind === "item" ? [n.href] : n.items.map((i) => i.href)));
-
-function useActiveHref(pathname: string | null): string {
-  if (!pathname) return "";
-  let best = "";
-  for (const href of ALL_HREFS) {
-    const matches = href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
-    if (matches && href.length > best.length) best = href;
-  }
-  return best;
-}
-
-const SECTION_IDS = NAV.filter((n): n is Section => n.kind === "section").map((s) => s.id);
 
 export default function Sidebar({
   collapsed,
   onToggle,
-  sections,
-  isOwner,
+  admin,
 }: {
   collapsed: boolean;
   onToggle: () => void;
-  sections: string[];
-  isOwner: boolean;
+  admin: AdminSession | null;
 }) {
   const pathname = usePathname();
-  const activeHref = useActiveHref(pathname);
+  const activeHref = activeHrefFor(pathname);
   // Only show sections this role can access (Dashboard home is always shown).
-  const allowed = (id: string) => isOwner || sections.includes(id);
-  const visibleNav = NAV.filter((n) => (n.kind === "item" ? true : allowed(n.id)));
+  // No super-admin bypass: the backend does not bypass either, so a section
+  // shown on that basis would just 403 when opened.
+  const { logout } = useAuth();
+  const allowed = (id: string) => canSeeSection(admin, id);
+  const shownNav = visibleNav(allowed);
   // collapsed[sectionId] === true means that section is collapsed.
   const [secOpen, setSecOpen] = useState<Record<string, boolean>>(() => Object.fromEntries(SECTION_IDS.map((id) => [id, true])));
 
@@ -177,42 +96,76 @@ export default function Sidebar({
       return next;
     });
 
-  const linkClass = (href: string) =>
-    "group flex items-center gap-2.5 rounded-lg py-2 text-sm transition-colors " +
-    (collapsed ? "justify-center px-0" : "px-3") +
-    " " +
-    (activeHref === href ? "bg-emerald-50 font-medium text-jp-blue-dark" : "text-ink-muted hover:bg-slate-100 hover:text-ink");
+  /**
+   * Nav rows.
+   *
+   * The current page used to be marked with an accent bar down the left edge.
+   * That's gone: the icon itself carries the state now, lit in brand blue on a
+   * soft tinted plate, which reads faster than a separate mark you have to
+   * associate with the row. Hover lifts the whole row a step so nothing feels
+   * inert, and idle icons sit close to their labels in weight rather than two
+   * steps dimmer, which is what made the rail look switched off.
+   */
+  const linkClass = (href: string) => {
+    const active = activeHref === href;
+    return [
+      "group relative flex items-center gap-2.5 rounded-lg py-[0.4375rem] text-[0.8125rem] font-medium tracking-[-0.005em]",
+      "transition-colors duration-150 ease-out",
+      "outline-none focus-visible:ring-2 focus-visible:ring-app-blue-light/50",
+      collapsed ? "justify-center px-0" : "px-2.5",
+      // No plate, no tinted row — the icon alone carries the state. Anything
+      // boxed around the label just competed with it.
+      active ? "text-ink" : "text-ink-muted hover:text-ink",
+    ].join(" ");
+  };
+
+  /** The icon is the only thing that marks the current page. */
+  const iconWrapClass = () => "flex h-[1.55rem] w-[1.55rem] shrink-0 items-center justify-center";
 
   const iconClass = (href: string) =>
-    "h-4 w-4 shrink-0 " + (activeHref === href ? "text-jp-blue-light" : "text-ink-faint group-hover:text-ink-muted");
+    "h-[1.05rem] w-[1.05rem] shrink-0 transition-colors duration-150 " +
+    (activeHref === href
+      ? "text-app-blue-light drop-shadow-[0_0_7px_rgba(96,165,250,0.75)]"
+      : "text-ink-muted group-hover:text-ink");
 
   return (
     <aside
       className={
-        "fixed inset-y-0 left-0 z-30 flex flex-col border-r border-slate-200 bg-[#f8faf9] transition-[width] duration-200 " +
+        // Its own surface, not a tint of the page. At 40% over the old
+        // near-black this was indistinguishable from the content area, so the
+        // rail had no edge and the whole screen read as one flat sheet.
+        "fixed inset-y-0 left-0 z-30 flex flex-col border-r border-white/[0.07] bg-app-navy-light shadow-[1px_0_0_0_rgba(255,255,255,0.02),8px_0_24px_-12px_rgba(0,0,0,0.5)] transition-[width] duration-200 " +
         (collapsed ? "w-[4.25rem]" : "w-64")
       }
     >
       {/* Brand */}
       <div className={"flex items-center gap-2.5 py-5 " + (collapsed ? "justify-center px-0" : "px-5")}>
-        <div aria-hidden className="flex h-8 w-8 items-center justify-center rounded-lg bg-jp-blue text-sm font-bold text-white">A</div>
+        <div className="relative">
+          <Image src="/icon-200.png" alt={BRAND.name} width={32} height={32} className="rounded-lg" />
+          {collapsed && <StagingBadge compact />}
+        </div>
         {!collapsed && (
           <div className="leading-tight">
-            <div className="text-sm font-semibold text-ink">Able</div>
-            <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-ink-faint">Ops</div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-semibold text-ink">{BRAND.name}</span>
+              <StagingBadge />
+            </div>
+            <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-ink-faint">Admin</div>
           </div>
         )}
       </div>
 
       <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 pb-4">
-        {visibleNav.map((node, i) => {
+        {shownNav.map((node, i) => {
           if (node.kind === "item") {
             const Icon = node.icon;
             return (
               <ul key={node.href} className={i === 0 ? "space-y-0.5" : "mt-0.5 space-y-0.5"}>
                 <li>
                   <Link href={node.href} title={collapsed ? node.label : undefined} className={linkClass(node.href)}>
-                    <Icon className={iconClass(node.href)} />
+                    <span className={iconWrapClass()}>
+                            <Icon className={iconClass(node.href)} />
+                          </span>
                     {!collapsed && <span className="truncate">{node.label}</span>}
                   </Link>
                 </li>
@@ -226,14 +179,16 @@ export default function Sidebar({
             // Icon mode: divider + all items as icons (no collapsing).
             return (
               <div key={node.id} className="mt-3">
-                <div className="mx-2 mb-2 border-t border-slate-200" />
+                <div className="mx-2 mb-2 border-t border-white/[0.06]" />
                 <ul className="space-y-0.5">
                   {node.items.map((it) => {
                     const Icon = it.icon;
                     return (
                       <li key={it.href}>
                         <Link href={it.href} title={it.label} className={linkClass(it.href)}>
-                          <Icon className={iconClass(it.href)} />
+                          <span className={iconWrapClass()}>
+                            <Icon className={iconClass(it.href)} />
+                          </span>
                         </Link>
                       </li>
                     );
@@ -246,7 +201,7 @@ export default function Sidebar({
             <div key={node.id} className="mt-4">
               <button
                 onClick={() => toggleSection(node.id)}
-                className="flex w-full items-center gap-2 px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-faint/70 transition-colors hover:text-ink-muted"
+                className="flex w-full items-center gap-2 px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-faint transition-colors hover:text-ink-muted"
               >
                 <span className="flex-1 text-left">{node.label}</span>
                 <ChevronDown className={"h-3 w-3 transition-transform " + (open ? "" : "-rotate-90")} />
@@ -258,7 +213,9 @@ export default function Sidebar({
                     return (
                       <li key={it.href}>
                         <Link href={it.href} className={linkClass(it.href)}>
-                          <Icon className={iconClass(it.href)} />
+                          <span className={iconWrapClass()}>
+                            <Icon className={iconClass(it.href)} />
+                          </span>
                           <span className="truncate">{it.label}</span>
                         </Link>
                       </li>
@@ -271,8 +228,45 @@ export default function Sidebar({
         })}
       </nav>
 
-      {/* Footer: collapse toggle */}
-      <div className="space-y-1 border-t border-slate-200 p-3">
+      {/* Footer: change own password, Admins (needs admins:read), collapse */}
+      <div className="space-y-1 border-t border-white/[0.06] p-3">
+        {/* Shared-password sessions (id "local:<email>") have no backend account to change. */}
+        {!admin?.id.startsWith("local:") && <ChangePasswordButton collapsed={collapsed} />}
+        {hasPermission(admin, "admins:read") && (
+          <Link
+            href="/admins"
+            title={collapsed ? "Admin Settings" : undefined}
+            className={
+              "flex w-full items-center gap-2 rounded-lg py-2 text-sm transition-colors " +
+              (collapsed ? "justify-center px-0" : "px-2") +
+              " " +
+              (pathname?.startsWith("/admins") ? "bg-app-blue/15 text-app-blue-light" : "text-ink-muted hover:bg-white/[0.04] hover:text-ink")
+            }
+          >
+            <ShieldCheck className="h-4 w-4 shrink-0" />
+            {!collapsed && <span>Admin Settings</span>}
+          </Link>
+        )}
+        {/* Who you are, and the way out. There was no sign-out control at all
+            before, the only way to end a session was to wait 24h or clear
+            cookies, which also made "sign in again to pick up new
+            permissions" impossible to actually do. */}
+        {admin && !collapsed && (
+          <div className="truncate px-2 pt-1 text-[11px] text-ink-faint" title={admin.email}>
+            {admin.email}
+          </div>
+        )}
+        <button
+          onClick={() => logout()}
+          title={collapsed ? "Sign out" : undefined}
+          className={
+            "flex w-full items-center gap-2 rounded-lg py-2 text-sm text-ink-muted transition-colors hover:bg-white/[0.04] hover:text-ink " +
+            (collapsed ? "justify-center px-0" : "px-2")
+          }
+        >
+          <LogOut className="h-4 w-4 shrink-0" />
+          {!collapsed && <span>Sign out</span>}
+        </button>
         <button
           onClick={onToggle}
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}

@@ -1,7 +1,7 @@
 import type { Platform } from "@/lib/creators";
 
 /**
- * Inline SVG glyphs for IG/TT/YT — ported verbatim from jp-creators.
+ * Inline SVG glyphs for IG/TT/YT — ported verbatim from roster.
  * Lucide doesn't ship brand icons, so these are single-colour
  * (currentColor) so we can tint via Tailwind text-color utilities.
  */
@@ -41,7 +41,7 @@ interface Palette {
 
 const PALETTE: Record<Platform, Palette> = {
   instagram: { Glyph: IGGlyph, bg: "bg-fuchsia-500/15", fg: "text-fuchsia-300", ring: "ring-fuchsia-500/25", label: "Instagram" },
-  tiktok:    { Glyph: TTGlyph, bg: "bg-jp-cyan/15",     fg: "text-jp-cyan",     ring: "ring-jp-cyan/25",    label: "TikTok"    },
+  tiktok:    { Glyph: TTGlyph, bg: "bg-app-cyan/15",     fg: "text-app-cyan",     ring: "ring-app-cyan/25",    label: "TikTok"    },
   youtube:   { Glyph: YTGlyph, bg: "bg-red-500/15",     fg: "text-red-400",     ring: "ring-red-500/25",    label: "YouTube"   },
 };
 

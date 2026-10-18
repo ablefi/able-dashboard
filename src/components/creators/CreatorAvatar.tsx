@@ -23,7 +23,7 @@ export function CreatorAvatar({ name, src, size = "md" }: { name: string; src: s
   useEffect(() => { setErrorCount(0); setRetry(0); }, [src]);
 
   const initials = name.split(/\s+/).map((p) => p[0]?.toUpperCase()).filter(Boolean).slice(0, 2).join("");
-  const cls = "inline-flex flex-shrink-0 items-center justify-center rounded-full font-semibold overflow-hidden ring-1 ring-jp-blue/20 " + SIZES[size];
+  const cls = "inline-flex flex-shrink-0 items-center justify-center rounded-full font-semibold overflow-hidden ring-1 ring-app-blue/20 " + SIZES[size];
   const href = src ? (retry > 0 ? `${src}${src.includes("?") ? "&" : "?"}r=${retry}` : src) : null;
 
   if (href && errorCount < 2) {
@@ -39,5 +39,5 @@ export function CreatorAvatar({ name, src, size = "md" }: { name: string; src: s
       />
     );
   }
-  return <span className={cls + " bg-gradient-to-br from-jp-blue to-jp-blue-dark text-white"}>{initials || "?"}</span>;
+  return <span className={cls + " bg-gradient-to-br from-app-blue to-app-blue-dark text-white"}>{initials || "?"}</span>;
 }

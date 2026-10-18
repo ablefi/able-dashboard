@@ -67,7 +67,7 @@ export default function Drawer({
       />
       <div
         className={cn(
-          "absolute inset-y-0 right-0 flex w-full flex-col border-l border-white/[0.08] bg-jp-navy shadow-2xl shadow-black/60 transition-transform duration-200 ease-out",
+          "absolute inset-y-0 right-0 flex w-full flex-col border-l border-white/[0.08] bg-app-navy shadow-2xl shadow-black/60 transition-transform duration-200 ease-out",
           W,
           shown ? "translate-x-0" : "translate-x-full"
         )}

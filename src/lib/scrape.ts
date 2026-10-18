@@ -1,9 +1,9 @@
-import { captionMentionsBrand } from "@/lib/brand";
 import "server-only";
-import { appStateSet } from "@/lib/supabaseRest";
+import { storageHeaders } from "@/lib/postThumbs";
+import { appState, appStateSet } from "@/lib/supabaseRest";
 
 /**
- * ScrapeCreators ingestion — ported from jp-creators' actions.ts. Pulls a
+ * ScrapeCreators ingestion — ported from roster' actions.ts. Pulls a
  * creator's recent posts from IG/TikTok/YouTube, normalizes them, and upserts
  * into the shared `posts` table (+ today's view_snapshots row). Reimplemented
  * over PostgREST (this app talks raw REST, not the Supabase JS client).
@@ -13,7 +13,34 @@ import { appStateSet } from "@/lib/supabaseRest";
  */
 
 export const SC_BASE = "https://api.scrapecreators.com";
-const MAX_PAGES = 5;
+/**
+ * How deep to page a creator's feed per refresh.
+ *
+ * This is a safety cap, not a budget: every platform loop stops once an entire
+ * page falls outside the 30-day window, so a normal creator still stops after
+ * one or two pages. The cap only binds for accounts that genuinely post more
+ * than `MAX_PAGES × 10` times inside the window.
+ *
+ * It was 5 — 50 posts — which silently froze the counts of high-volume
+ * creators: once a post fell past the 50 most recent it was never re-scraped
+ * again, so its view count stopped moving while the real one kept climbing.
+ * Measured 1 Sep 2026: 237 of 930 posts from the previous fortnight had no
+ * snapshot in 24h. These numbers are what creators get paid on, so a frozen
+ * count is an underpayment.
+ *
+ * Sizing it to the current roster turned out to be the wrong instinct. It was
+ * set to 25 when the heaviest account needed 21 pages; six days later that
+ * account (Shakur Kelley, Instagram) was at 233 posts in 30 days, needing 24.
+ * One page of headroom, on the metric creators get paid from, where running
+ * out is silent.
+ *
+ * So this is now a runaway-loop stop rather than a fitted number. Raising it
+ * costs nothing for anyone else: every loop already exits once a whole page
+ * falls outside the window, so the roster's next-heaviest accounts still stop
+ * at 8 pages or fewer. Only an account that genuinely posts this much ever
+ * pages deeper, which is exactly the account that must not freeze.
+ */
+const MAX_PAGES = 60;
 
 export type Platform = "instagram" | "tiktok" | "youtube";
 export interface NormalizedPost {
@@ -41,6 +68,30 @@ const sbHeaders = (extra: Record<string, string> = {}) => ({
   "Content-Type": "application/json",
   ...extra,
 });
+/**
+ * Every row, not the first thousand.
+ *
+ * PostgREST caps a response at 1000 rows and says so only in the Content-Range
+ * header, so a plain sbGet on a table that has grown past that silently returns
+ * a slice. For a "has this creator posted recently" lookup that slice reads as
+ * "no", which would quietly stop refreshing the creators who ARE posting. The
+ * 14-day window already sits at 989 rows.
+ */
+export async function sbGetAll(path: string, pageSize = 1000): Promise<any[]> {
+  const out: any[] = [];
+  for (let from = 0; from < 100_000; from += pageSize) {
+    const res = await fetch(`${SB()}/rest/v1/${path}`, {
+      headers: sbHeaders({ Range: `${from}-${from + pageSize - 1}` }),
+      cache: "no-store",
+    });
+    if (!res.ok) throw new Error(`sbGetAll ${path}: ${res.status} ${(await res.text()).slice(0, 120)}`);
+    const chunk = (await res.json()) as any[];
+    out.push(...chunk);
+    if (chunk.length < pageSize) break;
+  }
+  return out;
+}
+
 export async function sbGet(path: string): Promise<any[]> {
   const res = await fetch(`${SB()}/rest/v1/${path}`, { headers: sbHeaders(), cache: "no-store" });
   if (!res.ok) throw new Error(`sbGet ${path}: ${res.status} ${(await res.text()).slice(0, 120)}`);
@@ -82,9 +133,29 @@ async function sbRpc(fn: string, body: Record<string, unknown>): Promise<void> {
 function recordSCCredits(remaining: number): void {
   appStateSet("sc_credits", { remaining, recorded_at: new Date().toISOString() }).catch(() => {});
 }
-// Auto-approve ONLY on a real @mention of our own account in the caption.
-// The handles and matching rules live in lib/brand.ts so they can be changed
-// in one place.
+// Auto-approve ONLY on a real @mention of your app's account in the caption,
+// not loose brand words in the text. Handles differ per platform, so list them
+// all in BRAND_HANDLES (comma separated, without "@"). TikTok often renders a
+// mention as the DISPLAY NAME ("@My App", with a space), so BRAND_DISPLAY_NAME
+// is matched too. Everything is anchored on "@", so the bare brand phrase in an
+// ordinary caption never auto-approves.
+const BRAND_HANDLE_TOKENS = new Set(
+  (process.env.BRAND_HANDLES || "able,ablefinance,able.finance").split(",").map((h) => h.trim().toLowerCase().replace(/^@/, "")).filter(Boolean),
+);
+const BRAND_DISPLAY_MENTION = (() => {
+  const words = (process.env.BRAND_DISPLAY_NAME || "Able Finance").trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return null;
+  const escaped = words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  return new RegExp(`@\\s*${escaped.join("\\s+")}`, "i");
+})();
+function captionMentionsBrand(caption: string | null | undefined): boolean {
+  if (!caption) return false;
+  const c = caption.toLowerCase();
+  for (const m of c.matchAll(/@([a-z0-9_.]+)/g)) {
+    if (BRAND_HANDLE_TOKENS.has(m[1].replace(/\.+$/, ""))) return true;
+  }
+  return BRAND_DISPLAY_MENTION ? BRAND_DISPLAY_MENTION.test(c) : false;
+}
 function ytPostedAt(v: Record<string, unknown>): string {
   for (const k of ["publishDate", "publishedTime", "publish_date", "publishedAt"] as const) {
     const val = v[k];
@@ -124,8 +195,39 @@ async function fetchTikTokPosts(handle: string, headers: Record<string, string>,
       };
     });
     all.push(...batch);
-    const oldest = batch.reduce((min, p) => Math.min(min, new Date(p.posted_at).getTime()), Infinity);
-    if (oldest <= cutoffMs) break;
+    // Where to stop paginating.
+    //
+    // This used to stop as soon as the page's OLDEST post crossed the cutoff,
+    // which a single pinned video breaks completely: pins sit at the TOP of
+    // page 1 and can be months old, so `oldest` was pre-cutoff on the very
+    // first page and pagination ended immediately. For any creator with an old
+    // pin, only the handful of recent posts sharing page 1 ever refreshed —
+    // regardless of MAX_PAGES — and everything behind them froze. Pins can't
+    // be filtered by flag either: `is_top` comes back 0 in trim-mode.
+    //
+    // A first attempt dropped only the LEADING run of pre-cutoff posts, on the
+    // assumption that pins always sit above the real feed. They do not.
+    // Instagram returns them interleaved — _saykurspeekss_ page 1 came back as
+    // [Aug 29, Aug 30, MAR 29, Sep 7, Sep 6 ...], with the pin at index 2. One
+    // fresh post above it was enough to put the pin back inside the boundary
+    // test, so that creator still broke on page 1 and fourteen approved posts
+    // sat frozen for four days.
+    //
+    // So the test looks at the TAIL of the page, not the head and not all of it.
+    //
+    // Requiring the whole page to be pre-cutoff is correct but always costs one
+    // page PAST the boundary, on every feed, on every run — about 250 credits a
+    // day across the roster, a third of the burn. The last two items are enough:
+    // a feed is reverse-chronological below the pins, so once BOTH of the oldest
+    // items on a page are outside the window the boundary is inside this page
+    // and there is nothing newer further down. A stray pin at the very bottom
+    // does not trigger it, because the item above it is still fresh.
+    //
+    // Two items rather than one deliberately: one would stop on a single
+    // bottom-of-page pin. Fooling this needs two adjacent pins at the end of a
+    // page, and pins cluster at the top.
+    const tail = batch.slice(-2);
+    if (tail.length > 0 && tail.every((p) => new Date(p.posted_at).getTime() <= cutoffMs)) break;
     cursor = (data.max_cursor as string | undefined) ?? (data.cursor as string | undefined) ?? null;
     if (!cursor || data.has_more === false) break;
   }
@@ -162,8 +264,39 @@ async function fetchInstagramPosts(handle: string, headers: Record<string, strin
       };
     });
     all.push(...batch);
-    const oldest = batch.reduce((min, p) => Math.min(min, new Date(p.posted_at).getTime()), Infinity);
-    if (oldest <= cutoffMs) break;
+    // Where to stop paginating.
+    //
+    // This used to stop as soon as the page's OLDEST post crossed the cutoff,
+    // which a single pinned video breaks completely: pins sit at the TOP of
+    // page 1 and can be months old, so `oldest` was pre-cutoff on the very
+    // first page and pagination ended immediately. For any creator with an old
+    // pin, only the handful of recent posts sharing page 1 ever refreshed —
+    // regardless of MAX_PAGES — and everything behind them froze. Pins can't
+    // be filtered by flag either: `is_top` comes back 0 in trim-mode.
+    //
+    // A first attempt dropped only the LEADING run of pre-cutoff posts, on the
+    // assumption that pins always sit above the real feed. They do not.
+    // Instagram returns them interleaved — _saykurspeekss_ page 1 came back as
+    // [Aug 29, Aug 30, MAR 29, Sep 7, Sep 6 ...], with the pin at index 2. One
+    // fresh post above it was enough to put the pin back inside the boundary
+    // test, so that creator still broke on page 1 and fourteen approved posts
+    // sat frozen for four days.
+    //
+    // So the test looks at the TAIL of the page, not the head and not all of it.
+    //
+    // Requiring the whole page to be pre-cutoff is correct but always costs one
+    // page PAST the boundary, on every feed, on every run — about 250 credits a
+    // day across the roster, a third of the burn. The last two items are enough:
+    // a feed is reverse-chronological below the pins, so once BOTH of the oldest
+    // items on a page are outside the window the boundary is inside this page
+    // and there is nothing newer further down. A stray pin at the very bottom
+    // does not trigger it, because the item above it is still fresh.
+    //
+    // Two items rather than one deliberately: one would stop on a single
+    // bottom-of-page pin. Fooling this needs two adjacent pins at the end of a
+    // page, and pins cluster at the top.
+    const tail = batch.slice(-2);
+    if (tail.length > 0 && tail.every((p) => new Date(p.posted_at).getTime() <= cutoffMs)) break;
     const paging = data.paging_info as { max_id?: string; more_available?: boolean } | undefined;
     maxId = paging?.max_id ?? null;
     if (!maxId || paging?.more_available === false) break;
@@ -205,8 +338,39 @@ async function fetchYouTube(kind: "videos" | "shorts" | "community", handle: str
       };
     });
     all.push(...batch);
-    const oldest = batch.reduce((min, p) => Math.min(min, new Date(p.posted_at).getTime()), Infinity);
-    if (oldest <= cutoffMs) break;
+    // Where to stop paginating.
+    //
+    // This used to stop as soon as the page's OLDEST post crossed the cutoff,
+    // which a single pinned video breaks completely: pins sit at the TOP of
+    // page 1 and can be months old, so `oldest` was pre-cutoff on the very
+    // first page and pagination ended immediately. For any creator with an old
+    // pin, only the handful of recent posts sharing page 1 ever refreshed —
+    // regardless of MAX_PAGES — and everything behind them froze. Pins can't
+    // be filtered by flag either: `is_top` comes back 0 in trim-mode.
+    //
+    // A first attempt dropped only the LEADING run of pre-cutoff posts, on the
+    // assumption that pins always sit above the real feed. They do not.
+    // Instagram returns them interleaved — _saykurspeekss_ page 1 came back as
+    // [Aug 29, Aug 30, MAR 29, Sep 7, Sep 6 ...], with the pin at index 2. One
+    // fresh post above it was enough to put the pin back inside the boundary
+    // test, so that creator still broke on page 1 and fourteen approved posts
+    // sat frozen for four days.
+    //
+    // So the test looks at the TAIL of the page, not the head and not all of it.
+    //
+    // Requiring the whole page to be pre-cutoff is correct but always costs one
+    // page PAST the boundary, on every feed, on every run — about 250 credits a
+    // day across the roster, a third of the burn. The last two items are enough:
+    // a feed is reverse-chronological below the pins, so once BOTH of the oldest
+    // items on a page are outside the window the boundary is inside this page
+    // and there is nothing newer further down. A stray pin at the very bottom
+    // does not trigger it, because the item above it is still fresh.
+    //
+    // Two items rather than one deliberately: one would stop on a single
+    // bottom-of-page pin. Fooling this needs two adjacent pins at the end of a
+    // page, and pins cluster at the top.
+    const tail = batch.slice(-2);
+    if (tail.length > 0 && tail.every((p) => new Date(p.posted_at).getTime() <= cutoffMs)) break;
     cont = (data.continuationToken as string | undefined) ?? null;
     if (!cont) break;
   }
@@ -225,7 +389,7 @@ async function upsertPost(creatorId: string, platform: Platform, post: Normalize
       thumbnail_url: post.thumbnail_url, caption: post.caption, url: post.url, posted_at: post.posted_at,
       media_urls: post.media_urls ?? null,
     };
-    // Retroactive auto-approve: a JP-mention post gets approved on re-scrape too
+    // Retroactive auto-approve: a brand-mention post gets approved on re-scrape too
     // (handles edited-in mentions + posts that predate approval). Never resurrect
     // a manually-excluded post — Exclude is the override to keep one out.
     if (captionMentionsBrand(post.caption) && !existing[0].excluded) patch.approved = true;
@@ -319,7 +483,7 @@ export async function pullPersonaPosts(personaId: string, windowDays = 30): Prom
   return { ok: true, inserted, updated, errors: errors.length ? errors : undefined };
 }
 
-export interface RefreshAllResult { ok: boolean; creators_processed: number; inserted: number; updated: number; failures: number; error?: string }
+export interface RefreshAllResult { ok: boolean; creators_processed: number; creators_skipped_quiet?: number; inserted: number; updated: number; failures: number; error?: string }
 
 /** Pull the avatar (TikTok preferred, else Instagram) → cache to the
  * creator-avatars bucket so it never expires. Ported from pullCreatorProfile. */
@@ -369,7 +533,10 @@ export async function pullCreatorProfile(creatorId: string): Promise<{ ok: boole
         const bytes = await imgRes.arrayBuffer();
         const upRes = await fetch(`${SB()}/storage/v1/object/creator-avatars/${objectPath}`, {
           method: "POST",
-          headers: { Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`, "Content-Type": contentType, "x-upsert": "true", "Cache-Control": "public, max-age=31536000, immutable" },
+          // storageHeaders, not a bare Authorization: Storage needs `apikey`
+          // too now the service key is sb_secret_ rather than a JWT. Without it
+          // this silently fell through to the upstream avatar URL every time.
+          headers: storageHeaders({ "Content-Type": contentType, "x-upsert": "true", "Cache-Control": "public, max-age=31536000, immutable" }),
           body: bytes,
         });
         if (upRes.ok) storedUrl = `${SB()}/storage/v1/object/public/creator-avatars/${objectPath}`;
@@ -404,14 +571,302 @@ export async function pullAudienceCountry(creatorId: string): Promise<{ ok: bool
 }
 
 /** Refresh every active leaf creator (the cron + Refresh-all button). */
-export async function refreshAllCreators(windowDays = 30): Promise<RefreshAllResult> {
+/** Days without a post before a creator drops to one refresh a day. */
+const QUIET_DAYS = 14;
+
+/**
+ * Which creators to walk on this run.
+ *
+ * Paging a feed costs a credit per page and the deepest accounts are 20+ pages,
+ * so refreshing a creator who has not posted in a fortnight three times a day
+ * buys nothing: their view counts still move, but a once-daily snapshot is
+ * plenty for a monthly payout, and measured against the roster this is about a
+ * fifth of the daily burn.
+ *
+ * Quiet creators are still refreshed on the 00:00 UTC run, so nobody goes more
+ * than a day without a snapshot. Anyone signed in the last week is always
+ * included — they have no posting history to judge them on yet.
+ */
+async function creatorsDueThisRun(all: any[], windowDays: number): Promise<any[]> {
+  const deepRun = new Date().getUTCHours() < 8; // the 00:00 cron; the other two skip the quiet ones
+  if (deepRun) return all;
+
+  const quietCut = new Date(Date.now() - QUIET_DAYS * 86400_000).toISOString();
+  const newCut = new Date(Date.now() - 7 * 86400_000).toISOString();
+
+  const recent = await sbGetAll(
+    `posts?select=creator_id&posted_at=gte.${quietCut}&order=posted_at.desc`
+  ).catch(() => [] as any[]);
+  // A read failure must not silently halve the refresh — fall back to everyone.
+  if (!Array.isArray(recent) || recent.length === 0) return all;
+
+  const posting = new Set((recent as any[]).map((r) => r.creator_id));
+  return all.filter((c) => posting.has(c.id) || (c.created_at && c.created_at >= newCut));
+}
+
+/** `onlyIds` limits the run to one dashboard section's creators. The 8-hourly
+ * cron passes nothing and refreshes everyone. */
+export async function refreshAllCreators(windowDays = 30, onlyIds?: Set<string>): Promise<RefreshAllResult> {
   const headers = scHeaders();
   if (!headers) return { ok: false, creators_processed: 0, inserted: 0, updated: 0, failures: 0, error: "ScrapeCreators API key not configured." };
-  const tag = encodeURIComponent("{jp-creators}");
-  const leaves = await sbGet(`creators?select=id,instagram_handle,tiktok_handle,youtube_handle&tags=cs.${tag}&status=eq.active&type=neq.persona`);
-  const withHandle = (leaves as any[]).filter((c) => c.instagram_handle || c.tiktok_handle || c.youtube_handle);
+  const tag = encodeURIComponent("{roster}");
+  const leaves = await sbGet(`creators?select=id,created_at,instagram_handle,tiktok_handle,youtube_handle&tags=cs.${tag}&status=eq.active&type=neq.persona`);
+  const all = (leaves as any[]).filter((c) => (c.instagram_handle || c.tiktok_handle || c.youtube_handle) && (!onlyIds || onlyIds.has(c.id)));
+  const withHandle = await creatorsDueThisRun(all, windowDays);
   const results = await Promise.all(withHandle.map((c) => pullCreatorPosts(c.id, windowDays).catch((e) => ({ ok: false, error: String(e) } as PullResult))));
   let inserted = 0, updated = 0, failures = 0;
   results.forEach((r) => { if (r.ok) { inserted += r.inserted ?? 0; updated += r.updated ?? 0; } else failures++; });
-  return { ok: true, creators_processed: withHandle.length, inserted, updated, failures };
+  return { ok: true, creators_processed: withHandle.length, creators_skipped_quiet: all.length - withHandle.length, inserted, updated, failures };
+}
+
+
+// ---------------------------------------------------------------------------
+// YouTube auto-approve by description
+// ---------------------------------------------------------------------------
+
+/**
+ * YouTubers put the brand plug in the DESCRIPTION, but the feed endpoints
+ * only give us the title, which is what lands in `caption`. So
+ * `captionMentionsBrand()` never fires for YouTube and every video waits for
+ * a manual tick.
+ *
+ * The per-video endpoint returns the description and a parsed `descriptionLinks`
+ * array, at a credit each. That is only affordable because each video is checked
+ * ONCE: the checked ids live in app_state, pruned past the window, so the cron
+ * pays for new videos rather than re-reading the backlog every eight hours.
+ */
+
+const YT_CHECKED_KEY = "yt_description_checked";
+/** Below this, only the core scrape runs. Roughly two days of refreshes. */
+const MIN_CREDITS_FOR_EXTRAS = 2000;
+/** Ids are dropped once they age past this, so the record cannot grow forever. */
+const YT_CHECK_RETENTION_DAYS = 45;
+
+/** Domains that count as a link to your app (BRAND_LINK_DOMAINS, comma separated). */
+const BRAND_LINK_DOMAINS = (process.env.BRAND_LINK_DOMAINS || "able.finance").split(",").map((d) => d.trim().toLowerCase()).filter(Boolean);
+
+/** A link to one of your BRAND_LINK_DOMAINS anywhere in the parsed links or text. */
+function descriptionLinksBrand(links: unknown, description: string | null | undefined): boolean {
+  const hay: string[] = [];
+  if (Array.isArray(links)) {
+    for (const l of links) {
+      if (typeof l === "string") hay.push(l);
+      else if (l && typeof l === "object") {
+        const o = l as Record<string, unknown>;
+        for (const v of Object.values(o)) if (typeof v === "string") hay.push(v);
+      }
+    }
+  }
+  if (description) hay.push(description);
+  return BRAND_LINK_DOMAINS.length > 0 && hay.some((t) => BRAND_LINK_DOMAINS.some((d) => t.toLowerCase().includes(d)));
+}
+
+/**
+ * The description straight from YouTube's own watch page, at no credit cost.
+ *
+ * The page embeds the player response as JSON and `shortDescription` in it is
+ * the FULL description, links and all. Reading it here means this check no
+ * longer competes with the view-count refresh for ScrapeCreators credits,
+ * which is what had switched it off: the balance sat at 203 against a floor of
+ * 2,000, so the job stood down every run and new videos never got looked at.
+ *
+ * Measured against the real backlog: 89 of 89 live videos parsed, the 90th was
+ * an UNPLAYABLE (deleted or private) one, which the paid path cannot read
+ * either. Returns null on anything it cannot parse, including a consent wall
+ * or a markup change, and the caller falls back to the paid endpoint.
+ *
+ * YouTube RATE LIMITS this. Ninety requests four at a time earned a 429 and
+ * every read after it came back empty, which is exactly how a "free" fix
+ * quietly turns into no fix at all. So the reads are spaced out, and a 429
+ * gives up on the free path for the rest of the run rather than grinding
+ * through the remaining videos collecting nothing.
+ */
+const YT_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
+
+function extractShortDescription(html: string): string | null {
+  const marker = '"shortDescription":"';
+  const at = html.indexOf(marker);
+  if (at < 0) return null;
+  let i = at + marker.length;
+  let raw = "";
+  while (i < html.length) {
+    const c = html[i];
+    if (c === "\\") { raw += html[i] + html[i + 1]; i += 2; continue; }
+    if (c === '"') break;
+    raw += c;
+    i++;
+  }
+  try {
+    return JSON.parse('"' + raw + '"') as string;
+  } catch {
+    return null;
+  }
+}
+
+/** How long to wait between watch-page reads. Polite enough not to trip 429. */
+const YT_FREE_DELAY_MS = 1200;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+type FreeRead = { description: string | null; rateLimited: boolean };
+
+async function youtubeDescriptionFree(url: string): Promise<FreeRead> {
+  try {
+    const r = await fetch(url, {
+      headers: { "User-Agent": YT_UA, "Accept-Language": "en-US,en;q=0.9" },
+      cache: "no-store",
+    });
+    if (r.status === 429) return { description: null, rateLimited: true };
+    if (!r.ok) return { description: null, rateLimited: false };
+    return { description: extractShortDescription(await r.text()), rateLimited: false };
+  } catch {
+    return { description: null, rateLimited: false };
+  }
+}
+
+/**
+ * Long-form only. This check reads a video's description, and the other two
+ * kinds of YouTube post do not have one to read:
+ *
+ *   /shorts/  the endpoint answers, but the description comes back empty every
+ *             time (6 of 6 sampled). A Shorts plug lives in the title, which is
+ *             already stored as `caption` and is not this function's job.
+ *   /post/    community posts are not videos; the endpoint 404s on them.
+ *
+ * Without this, 307 of the 363 posts waiting were calls that could not return
+ * an answer, at a credit each.
+ */
+function isLongFormYouTube(url: string): boolean {
+  return !/\/shorts\/|\/post\//.test(url);
+}
+
+export interface YtApproveResult {
+  ok: boolean;
+  candidates: number;
+  checked: number;
+  approved: number;
+  failures: number;
+  error?: string;
+}
+
+/**
+ * Check unapproved YouTube posts for a brand plug in the description and
+ * approve the ones that have it.
+ *
+ * `limit` caps how many videos one run looks at. It used to be a credit
+ * budget; now the reads are free and the only cost is time, so it is set high
+ * enough to clear the whole 30 day window in a single run and the cron has 300
+ * seconds to do it in.
+ */
+export async function autoApproveYouTubeDescriptions(
+  windowDays = 30,
+  limit = 250
+): Promise<YtApproveResult> {
+  const headers = scHeaders();
+
+  // Refreshing view counts is what creators get paid on; clearing an approval
+  // queue is a convenience. When the balance is low the first must not lose
+  // credits to the second. That used to stop the whole job, which is why
+  // nothing had been approved for days. Now only the PAID fallback stands
+  // down: reading the description from YouTube costs nothing and always runs.
+  const credits = (await appState("sc_credits")) as { remaining?: number } | null;
+  const mayPay =
+    !!headers && (typeof credits?.remaining !== "number" || credits.remaining >= MIN_CREDITS_FOR_EXTRAS);
+
+  const cutoff = new Date(Date.now() - windowDays * 86400_000).toISOString();
+  const tag = encodeURIComponent("{roster}");
+  const signed = await sbGet(`creators?select=id&tags=cs.${tag}&status=eq.active&type=neq.persona`);
+  const signedIds = new Set((signed as any[]).map((c) => c.id));
+  if (signedIds.size === 0) return { ok: true, candidates: 0, checked: 0, approved: 0, failures: 0 };
+
+  const posts = (await sbGet(
+    `posts?select=id,url,creator_id&platform=eq.youtube&approved=is.false&excluded=is.false&posted_at=gte.${cutoff}&order=posted_at.desc&limit=500`
+  )) as any[];
+
+  /**
+   * The record of what has already been PAID for. It is no longer a reason to
+   * skip a video outright: a creator can add the link to a description days
+   * after posting, and under the old rule that video was marked checked once
+   * and never read again, so it could never be approved. The free read costs
+   * nothing, so every candidate is re-read every run and only the paid
+   * fallback consults this.
+   */
+  const state = ((await appState(YT_CHECKED_KEY)) as Record<string, string> | null) ?? {};
+  const candidates = posts.filter(
+    (p) => signedIds.has(p.creator_id) && p.url && isLongFormYouTube(p.url)
+  );
+
+  let checked = 0, approved = 0, failures = 0;
+  // Flipped off by a 429 and stays off for the rest of the run.
+  let freeOk = true;
+  for (const post of candidates.slice(0, limit)) {
+    try {
+      let hit: boolean | null = null;
+
+      // Free first, while YouTube is still answering.
+      let free: FreeRead = { description: null, rateLimited: false };
+      if (freeOk) {
+        free = await youtubeDescriptionFree(post.url);
+        if (free.rateLimited) freeOk = false;
+        else await sleep(YT_FREE_DELAY_MS);
+      }
+
+      if (free.description !== null) {
+        checked++;
+        hit =
+          descriptionLinksBrand(null, free.description) ||
+          captionMentionsBrand(free.description);
+      } else if (mayPay && !state[post.id]) {
+        // Only what the free read could not answer, and only once per video.
+        const res = await fetch(
+          `${SC_BASE}/v1/youtube/video?url=${encodeURIComponent(post.url)}`,
+          { headers: headers!, cache: "no-store" }
+        );
+        checked++;
+        if (!res.ok) {
+          // 404 = deleted or private. Record it; re-asking every run buys nothing.
+          if (res.status === 404) state[post.id] = new Date().toISOString();
+          else failures++;
+          continue;
+        }
+        const data = await res.json();
+        if (typeof data.credits_remaining === "number") recordSCCredits(data.credits_remaining);
+        state[post.id] = new Date().toISOString();
+        const desc = typeof data.description === "string" ? data.description : null;
+        hit = descriptionLinksBrand(data.descriptionLinks, desc) || captionMentionsBrand(desc);
+      } else {
+        // Unreadable for free and not payable right now. Leave it for next run
+        // rather than recording a verdict nobody actually reached.
+        continue;
+      }
+
+      if (hit) {
+        // Re-read `excluded` at the moment of writing: Exclude is the manual
+        // override and must win even if it was set during this run.
+        const fresh = await sbGet(`posts?select=excluded,approved&id=eq.${post.id}&limit=1`);
+        if (fresh[0] && !fresh[0].excluded && !fresh[0].approved) {
+          await sbPatch("posts", `id=eq.${post.id}`, { approved: true });
+          approved++;
+        }
+      }
+    } catch {
+      failures++;
+    }
+  }
+
+  const keep = Date.now() - YT_CHECK_RETENTION_DAYS * 86400_000;
+  const pruned: Record<string, string> = {};
+  for (const [id, at] of Object.entries(state)) {
+    if (new Date(at).getTime() >= keep) pruned[id] = at;
+  }
+  await appStateSet(YT_CHECKED_KEY, pruned).catch(() => {});
+
+  return {
+    ok: true,
+    candidates: candidates.length,
+    checked,
+    approved,
+    failures,
+    ...(freeOk ? {} : { error: "YouTube rate limited the free reads; the rest wait for the next run." }),
+  };
 }

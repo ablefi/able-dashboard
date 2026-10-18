@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth";
+import { requireAnyCreatorsSession } from "@/lib/creatorMarket";
 import { fetchPostThumbnail } from "@/lib/supabaseRest";
 
 /**
- * Instagram thumbnail proxy — ported from jp-creators' /api/thumb/[id].
+ * Instagram thumbnail proxy — ported from roster' /api/thumb/[id].
  * IG CDN URLs are blocked by tracker blockers and expire in ~24h, so we
  * fetch them server-side and serve from our own domain, edge-cached.
  * TikTok/YouTube thumbs are served direct by the client (no proxy needed).
@@ -11,7 +12,8 @@ import { fetchPostThumbnail } from "@/lib/supabaseRest";
 export const maxDuration = 30;
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const guard = await requireSession(req, "creators");
+  // <img> requests carry no market, and thumbnails are public post images.
+  const guard = await requireAnyCreatorsSession(req);
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
   try {
