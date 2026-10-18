@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth";
+import { requireCreatorsSession, marketCreatorIds } from "@/lib/creatorMarket";
 import { fetchCreatorBySlug, fetchCreatorById, fetchCreatorChildren, fetchPostsWithSeries, fetchCreatorScrapeStatus } from "@/lib/supabaseRest";
 import {
   postCounts,
@@ -13,7 +14,7 @@ import {
 } from "@/lib/creators";
 
 /**
- * Creator detail for /creators/[slug] — mirrors jp-creators' c/[slug] page
+ * Creator detail for /creators/[slug] — mirrors roster' c/[slug] page
  * data. Resolves by handle or UUID; personas aggregate their children with
  * per-child counting rules (an influencer child needs approval, a UGC child
  * doesn't). Supports ?from/?to (or days), ?account=<childId> to narrow a
@@ -23,8 +24,9 @@ import {
 export const maxDuration = 60;
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: string }> }) {
-  const guard = await requireSession(req, "creators");
+  const guard = await requireCreatorsSession(req);
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
+  const market = guard.market;
 
   try {
     const { slug } = await ctx.params;
@@ -36,7 +38,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
     const accountFilter = searchParams.get("account")?.trim() || null;
 
     const creator = (await fetchCreatorBySlug(slug)) as Creator | null;
-    if (!creator) return NextResponse.json({ error: "Creator not found" }, { status: 404 });
+    if (!creator || !(await marketCreatorIds(market)).has(creator.id)) return NextResponse.json({ error: "Creator not found" }, { status: 404 });
 
     const isPersona = creator.type === "persona";
 

@@ -11,8 +11,8 @@ import { X } from "lucide-react";
 export default function BatchBar({ count, onClear, children }: { count: number; onClear: () => void; children: React.ReactNode }) {
   if (count === 0) return null;
   return (
-    <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl border border-jp-blue/30 bg-jp-blue/10 px-4 py-2.5">
-      <span className="text-sm font-medium text-jp-blue-light">{count} selected</span>
+    <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl border border-app-blue/30 bg-app-blue/10 px-4 py-2.5">
+      <span className="text-sm font-medium text-app-blue-light">{count} selected</span>
       <div className="flex flex-wrap items-center gap-1.5">{children}</div>
       <button onClick={onClear} className="ml-auto inline-flex items-center gap-1 text-xs text-ink-muted transition-colors hover:text-ink">
         <X className="h-3.5 w-3.5" /> Clear

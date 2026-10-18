@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import Empty from "@/components/ui/Empty";
+import { STAT_NEUTRAL } from "@/lib/statColors";
 import Tabs from "@/components/ui/Tabs";
 import { RefreshCw, Loader2 } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
@@ -24,19 +26,26 @@ interface PageView {
 
 type TimeRange = "24h" | "7d" | "30d" | "all";
 
-const IN_APP_PATHS = ["/cant-afford-it", "/cant-afford", "/cantafford", "/support", "/feedback", "/terms", "/privacy", "/terms-of-service", "/privacy-policy", "/terms-and-privacy"];
+/** Pages your app links to internally (support, legal). Edit for your site. */
+const IN_APP_PATHS = ["/support", "/feedback", "/terms", "/privacy", "/terms-of-service", "/privacy-policy", "/terms-and-privacy"];
 
-const CHART = { grid: "rgba(23,35,30,0.08)", tick: "#66756d" };
+const CHART = { grid: "rgba(255,255,255,0.05)", tick: "#8499b3" };
 const TOOLTIP_STYLE = {
-  contentStyle: { backgroundColor: "#ffffff", border: "1px solid #dce4df", borderRadius: "8px" },
-  labelStyle: { color: "#17231e" },
-  itemStyle: { color: "#17231e" },
+  contentStyle: { backgroundColor: "#15203a", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "8px" },
+  labelStyle: { color: "#f0f4f8" },
+  itemStyle: { color: "#f0f4f8" },
 };
 
 const authHeaders = (): Record<string, string> => {
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
+
+// "2026-09-02" -> "Sep 2, 2026". The year stays in the label: Recharts' XAxis is
+// categorical, so a year-less label is the SAME category as that day a year ago.
+function fmtDay(iso: string): string {
+  return new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
 
 export default function WebsiteAnalytics() {
   const [pageViews, setPageViews] = useState<PageView[]>([]);
@@ -86,7 +95,9 @@ export default function WebsiteAnalytics() {
       byCountry[country] = (byCountry[country] || 0) + 1;
       const device = v.device || "unknown";
       byDevice[device] = (byDevice[device] || 0) + 1;
-      const date = new Date(v.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      // Key by ISO date, NOT by a display label: a year-less "Sep 2" merges this
+      // year's views into last year's bucket on the "All time" range.
+      const date = new Date(v.created_at).toISOString().slice(0, 10);
       byDate[date] = (byDate[date] || 0) + 1;
       if (v.os === "ios" || v.os === "android") {
         const o = (osByPage[v.path] ||= { ios: 0, android: 0 });
@@ -95,12 +106,14 @@ export default function WebsiteAnalytics() {
     }
     return {
       totalViews,
-      // EVERY page, not a top-N — Adam wants the full list (the card scrolls).
+      // EVERY page, not a top-N — the owner wants the full list (the card scrolls).
       allPages: Object.entries(byPage).sort((a, b) => b[1] - a[1]),
       topCountries: Object.entries(byCountry).sort((a, b) => b[1] - a[1]).slice(0, 15),
       countryCount: Object.keys(byCountry).length,
       byDevice,
-      timeData: Object.entries(byDate).map(([date, views]) => ({ date, views })).reverse(),
+      timeData: Object.entries(byDate)
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([date, views]) => ({ date: fmtDay(date), views })),
       iosTotal,
       androidTotal,
       osByPage,
@@ -111,7 +124,7 @@ export default function WebsiteAnalytics() {
     <div className="space-y-5">
       <PageHeader
         title="Website Analytics"
-        subtitle="able.finance traffic"
+        subtitle="Website traffic"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -119,8 +132,8 @@ export default function WebsiteAnalytics() {
               className={cn(
                 "rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors",
                 marketingOnly
-                  ? "border-jp-blue/40 bg-jp-blue/15 text-jp-blue-light"
-                  : "border-white/[0.08] bg-jp-navy-card/50 text-ink-muted hover:text-ink"
+                  ? "border-app-blue/40 bg-app-blue/15 text-app-blue-light"
+                  : "border-white/[0.08] bg-app-navy-card/50 text-ink-muted hover:text-ink"
               )}
             >
               Marketing only
@@ -138,7 +151,7 @@ export default function WebsiteAnalytics() {
         }
       />
 
-      {error && <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-300">{error}</div>}
+      {error && <div className="rounded-lg border border-app-red/30 bg-app-red/10 px-4 py-2.5 text-sm text-app-red-text">{error}</div>}
 
       {loading && pageViews.length === 0 ? (
         <div className="flex items-center justify-center py-24 text-ink-muted">
@@ -147,20 +160,20 @@ export default function WebsiteAnalytics() {
       ) : (
         <div className={loading ? "opacity-60 transition-opacity" : "transition-opacity"}>
           <div className="grid grid-cols-2 gap-4 xl:grid-cols-6">
-            <FinCard label="Total Views" valueClass="text-jp-blue-light">{stats.totalViews.toLocaleString()}</FinCard>
-            <FinCard label="Countries" valueClass="text-emerald-400">{stats.countryCount.toLocaleString()}</FinCard>
-            <FinCard label="Desktop" valueClass="text-jp-purple">{(stats.byDevice.desktop || 0).toLocaleString()}</FinCard>
-            <FinCard label="Mobile" valueClass="text-jp-cyan">{(stats.byDevice.mobile || 0).toLocaleString()}</FinCard>
+            <FinCard label="Total Views" valueClass={STAT_NEUTRAL}>{stats.totalViews.toLocaleString()}</FinCard>
+            <FinCard label="Countries" valueClass={STAT_NEUTRAL}>{stats.countryCount.toLocaleString()}</FinCard>
+            <FinCard label="Desktop" valueClass={STAT_NEUTRAL}>{(stats.byDevice.desktop || 0).toLocaleString()}</FinCard>
+            <FinCard label="Mobile" valueClass={STAT_NEUTRAL}>{(stats.byDevice.mobile || 0).toLocaleString()}</FinCard>
             {/* OS split is captured from 2026-07-19 onward (no retroactive data). */}
-            <FinCard label="iOS" valueClass="text-ink">
+            <FinCard label="iOS" valueClass={STAT_NEUTRAL}>
               {stats.iosTotal + stats.androidTotal > 0
                 ? `${Math.round((stats.iosTotal / (stats.iosTotal + stats.androidTotal)) * 100)}%`
-                : "—"}
+                : "-"}
             </FinCard>
-            <FinCard label="Android" valueClass="text-emerald-300">
+            <FinCard label="Android" valueClass={STAT_NEUTRAL}>
               {stats.iosTotal + stats.androidTotal > 0
                 ? `${Math.round((stats.androidTotal / (stats.iosTotal + stats.androidTotal)) * 100)}%`
-                : "—"}
+                : "-"}
             </FinCard>
           </div>
 
@@ -176,14 +189,14 @@ export default function WebsiteAnalytics() {
                 </LineChart>
               </ResponsiveContainer>
             ) : (
-              <div className="flex h-[280px] items-center justify-center text-sm text-ink-faint">No data in this range.</div>
+              <div className="h-[280px]"><Empty compact title="No visits in this range" description="Try a wider date range." /></div>
             )}
           </Card>
 
           <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
             <Card title={`Pages (${stats.allPages.length})`}>
               {stats.allPages.length > 0 ? (
-                // Full list, no inner scroll — Adam wants every page flowing
+                // Full list, no inner scroll — the owner wants every page flowing
                 // down the page, not a capped box that reads like a top-N.
                 <div className="space-y-3">
                   {stats.allPages.map(([path, count]) => {
@@ -202,7 +215,7 @@ export default function WebsiteAnalytics() {
                           </span>
                         )}
                         <div className="h-2 w-24 overflow-hidden rounded-full bg-white/[0.04]">
-                          <div className="h-full rounded-full bg-jp-blue" style={{ width: `${(count / Math.max(1, stats.totalViews)) * 100}%` }} />
+                          <div className="h-full rounded-full bg-app-blue" style={{ width: `${(count / Math.max(1, stats.totalViews)) * 100}%` }} />
                         </div>
                         <span className="w-12 text-right text-sm font-medium text-ink num">{count}</span>
                       </div>
@@ -224,7 +237,7 @@ export default function WebsiteAnalytics() {
                       <span className="text-sm text-ink-muted">{p.flag ? `${p.flag} ` : ""}{p.label}</span>
                       <div className="flex items-center gap-2">
                         <div className="h-2 w-24 overflow-hidden rounded-full bg-white/[0.04]">
-                          <div className="h-full rounded-full bg-emerald-400" style={{ width: `${(count / Math.max(1, stats.totalViews)) * 100}%` }} />
+                          <div className="h-full rounded-full bg-app-green" style={{ width: `${(count / Math.max(1, stats.totalViews)) * 100}%` }} />
                         </div>
                         <span className="w-12 text-right text-sm font-medium text-ink num">{count}</span>
                       </div>

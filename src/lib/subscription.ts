@@ -4,9 +4,9 @@
  * secrets). The VALUES must match the backend enums exactly — it validates
  * with @IsEnum and 400s anything else, so never invent new strings here.
  *
- * ⚠️ These values are carried over from the original build and must be
- * reconciled with Able's own backend enums before the Users and Revenue pages
- * are relied on.
+ * ⚠️ The 5-value subscription enum ships on the STAGING backend first; keep
+ * dashboard changes that send these values off production until the backend team's
+ * prod backend has them (old prod expects active/former/never).
  */
 
 export type SubscriptionStatus =
@@ -46,19 +46,24 @@ export type CancelReason =
   | "other";
 
 /**
- * Fixed catalog: order, label, chart color. Colors are brand-family hues
- * validated as a set for the dark card surface (#15203a) — all-pairs
- * colorblind-safe (worst ΔE 13.4), in the lightness band, ≥3:1 contrast —
- * so the donut can sort slices by count without creating unsafe neighbors.
- * (jp-purple is deliberately absent: vs jp-blue it's deutan ΔE 1.9.)
+ * Fixed catalog: order, label, chart colour. The colours are one hue stepping
+ * down in lightness, not six separate hues.
+ *
+ * The previous set was six distinct hues chosen for colourblind safety. This
+ * is safer, not looser: lightness is the channel colour vision deficiency
+ * leaves intact, so a monotonic ramp separates reliably for everyone, and it
+ * stops the chart reading like a legend of unrelated colours.
+ *
+ * They're CSS variables rather than literals so they follow the accent hue
+ * when the theme changes.
  */
 export const CANCEL_REASONS: { value: CancelReason; label: string; color: string }[] = [
-  { value: "too_expensive", label: "Too expensive", color: "#d97706" },
-  { value: "not_using_the_app", label: "Not using the app", color: "#3b82f6" },
-  { value: "reached_my_goals", label: "Reached my goals", color: "#0d9488" },
-  { value: "too_many_bugs", label: "Too many bugs", color: "#f43f5e" },
-  { value: "missing_features", label: "Missing features", color: "#d55181" },
-  { value: "other", label: "Other", color: "#0891b2" },
+  { value: "too_expensive", label: "Too expensive", color: "var(--color-cat-6)" },
+  { value: "not_using_the_app", label: "Not using the app", color: "var(--color-cat-5)" },
+  { value: "reached_my_goals", label: "Reached my goals", color: "var(--color-cat-4)" },
+  { value: "too_many_bugs", label: "Too many bugs", color: "var(--color-cat-3)" },
+  { value: "missing_features", label: "Missing features", color: "var(--color-cat-2)" },
+  { value: "other", label: "Other", color: "var(--color-cat-1)" },
 ];
 
 export const CANCEL_REASON_LABELS: Record<string, string> = Object.fromEntries(

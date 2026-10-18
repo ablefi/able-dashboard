@@ -2,114 +2,232 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import AdminSettingsLink from "@/components/admins/AdminSettingsLink";
 import { usePathname } from "next/navigation";
-import {
-  LayoutDashboard, Users, Users2, Gift, Landmark, Crosshair, MoreHorizontal,
-  FileText, CalendarDays, BarChart3, BadgeCheck, Star, Globe, UserSearch, Link2, LayoutGrid,
-  type LucideIcon,
-} from "lucide-react";
+import { Search, MoreHorizontal, LogOut } from "lucide-react";
+import { canSeeSection, type AdminSession } from "@/lib/permissions";
+import { useAuth } from "@/context/AuthContext";
+import { NAV, activeHrefFor, sectionIdForPath, type Section, visibleNav } from "@/lib/nav";
 
-type Page = { href: string; label: string; icon: LucideIcon };
-type Section = { id: string; label: string; icon: LucideIcon; pages: Page[] };
+/**
+ * How many sections get their own tab before the rest fold into the overflow.
+ *
+ * Every section gets its own tab, so the built-in overflow button never
+ * appears. Lower this if you add more sections than fit.
+ */
+const PRIMARY = 8;
 
-// Only existing dashboard routes belong here. Product Ops and compliance live
-// in the separate core app, not this marketing dashboard.
-const SECTIONS: Section[] = [
-  { id: "creators", label: "Creators", icon: Users2, pages: [
-    { href: "/creators", label: "Roster", icon: Users2 },
-    { href: "/creators/posts", label: "Posts", icon: FileText },
-    { href: "/creators/calendar", label: "Calendar", icon: CalendarDays },
-    { href: "/creators/performance", label: "Performance", icon: BarChart3 },
-    { href: "/creators/performance-all", label: "GCP", icon: BadgeCheck },
-    { href: "/creators/outliers", label: "Outliers", icon: Star },
-    { href: "/content/own-posts", label: "Our posts", icon: LayoutGrid },
-  ] },
-  { id: "users", label: "Users", icon: Users, pages: [
-    { href: "/users", label: "Users", icon: Users },
-    { href: "/user-analysis", label: "User analysis", icon: BarChart3 },
-  ] },
-  { id: "codes", label: "Codes", icon: Gift, pages: [
-    { href: "/referral-codes", label: "Referral codes", icon: Gift },
-    { href: "/referral-codes/analytics", label: "Analytics", icon: BarChart3 },
-  ] },
-  { id: "finances", label: "Finances", icon: Landmark, pages: [
-    { href: "/revenue", label: "Revenue", icon: BarChart3 },
-  ] },
-  { id: "growth", label: "Growth", icon: Crosshair, pages: [
-    { href: "/website", label: "Website", icon: Globe },
-    { href: "/competitors", label: "Competitors", icon: Crosshair },
-    { href: "/prospects", label: "Prospects", icon: UserSearch },
-  ] },
-  { id: "more", label: "More", icon: MoreHorizontal, pages: [
-    { href: "/links", label: "Links", icon: Link2 },
-  ] },
-];
+const DEFAULT_SECTION_HREF: Record<string, string> = {
+  users: "/users",
+  creators: "/creators",
+  referral: "/referral-codes",
+  growth: "/reviews",
+};
 
-export default function BottomNav() {
-  const pathname = usePathname() || "/";
-  const [open, setOpen] = useState<string | null>(null);
-  const bar = useRef<HTMLElement>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const page = SECTIONS.flatMap((section) => section.pages)
-    .filter((item) => pathname === item.href || pathname.startsWith(item.href + "/"))
-    .sort((a, b) => b.href.length - a.href.length)[0];
-  const activeSection = SECTIONS.find((section) => section.pages.some((item) => item.href === page?.href))?.id;
-  const clearTimer = () => { if (timer.current) clearTimeout(timer.current); timer.current = null; };
-  const close = () => { clearTimer(); setOpen(null); };
-  const hover = (id: string | null) => {
-    if (!window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
-    clearTimer();
-    timer.current = setTimeout(() => setOpen(id), id ? 110 : 220);
+/**
+ * iOS-style bottom bar.
+ *
+ * The honest trade: the window gets its full width back and the chrome reads
+ * as an app rather than an admin panel, but ten sections do not fit as tabs,
+ * so the tail folds into More. That is the same compromise iOS makes, and it
+ * is only tolerable because the palette (⌘K) means the bar is not carrying
+ * the whole navigation load.
+ *
+ * Hovering a section raises its pages above that tab. Clicking goes straight
+ * to the section's most useful everyday page.
+ */
+export default function BottomNav({ admin }: { admin: AdminSession | null }) {
+  const pathname = usePathname();
+  const activeHref = activeHrefFor(pathname);
+  const activeSection = sectionIdForPath(pathname);
+  const { logout } = useAuth();
+  const [openId, setOpenId] = useState<string | null>(null);
+  const barRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Hover opens a section, so reaching a page is one click instead of two.
+   *
+   * Both delays exist for a reason. Opening waits ~110ms so dragging the
+   * pointer across the bar to reach Search does not flash five sheets on the
+   * way. Closing waits ~220ms so the gap between a tab and the sheet above it
+   * does not count as leaving, which would make the sheet impossible to reach.
+   *
+   * Guarded on (hover: hover): a touch screen reports a mouseenter on tap, so
+   * without this a phone would open the sheet and immediately act on the tap
+   * underneath it. Click still works everywhere regardless.
+   */
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const canHover = () => typeof window !== "undefined" && window.matchMedia("(hover: hover)").matches;
+  const clearHover = () => { if (hoverTimer.current) { clearTimeout(hoverTimer.current); hoverTimer.current = null; } };
+  const hoverOpen = (id: string) => {
+    if (!canHover()) return;
+    clearHover();
+    hoverTimer.current = setTimeout(() => setOpenId(id), 110);
   };
-  useEffect(() => { clearTimer(); setOpen(null); }, [pathname]);
+  const hoverLeave = () => {
+    if (!canHover()) return;
+    clearHover();
+    hoverTimer.current = setTimeout(() => setOpenId(null), 220);
+  };
+  // A timer that outlives the component would setState on an unmounted tree.
+  useEffect(() => clearHover, []);
+
+  const nodes = visibleNav((s) => canSeeSection(admin, s));
+  const sections = nodes.filter((n): n is Section => n.kind === "section");
+  const primary = sections.slice(0, PRIMARY);
+  const overflow = sections.slice(PRIMARY);
+
+  // Close the sheet on navigation and on any outside press.
+  useEffect(() => setOpenId(null), [pathname]);
   useEffect(() => {
-    const outside = (event: PointerEvent) => { if (!bar.current?.contains(event.target as Node)) close(); };
-    const escape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      const trigger = bar.current?.querySelector<HTMLButtonElement>('[aria-expanded="true"]');
-      close();
-      trigger?.focus();
+    if (!openId) return;
+    const onDown = (e: MouseEvent) => {
+      if (!barRef.current?.contains(e.target as Node)) setOpenId(null);
     };
-    document.addEventListener("pointerdown", outside);
-    document.addEventListener("keydown", escape);
-    return () => { clearTimer(); document.removeEventListener("pointerdown", outside); document.removeEventListener("keydown", escape); };
-  }, []);
+    const onEsc = (e: KeyboardEvent) => e.key === "Escape" && setOpenId(null);
+    window.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onEsc);
+    return () => {
+      window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onEsc);
+    };
+  }, [openId]);
 
   return (
-    <nav ref={bar} className="able-tabbar" aria-label="Main navigation">
-      <Link href="/" className={"able-tab " + (pathname === "/" ? "is-on" : "")} aria-current={pathname === "/" ? "page" : undefined} onClick={close}>
-        <LayoutDashboard aria-hidden="true" /><span>Overview</span>
-      </Link>
-      {SECTIONS.map((section) => {
-        const Icon = section.icon;
-        const expanded = open === section.id;
-        return (
-          <div key={section.id} className="able-nav-group" onPointerEnter={(event) => { if (event.pointerType === "mouse") hover(section.id); }} onPointerLeave={(event) => { if (event.pointerType === "mouse") hover(null); }}>
-            {expanded && (
-              <div id={"nav-" + section.id} className="able-nav-sheet" onPointerEnter={clearTimer}>
-                <p>{section.label}</p>
-                <div className="able-nav-grid">
-                  {section.pages.map((item) => {
-                    const PageIcon = item.icon;
-                    return <Link key={item.href} href={item.href} onClick={close} aria-current={page?.href === item.href ? "page" : undefined}>
-                      <PageIcon aria-hidden="true" /><span>{item.label}</span>
-                    </Link>;
-                  })}
+    <div ref={barRef} className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center">
+      {/* The overflow sheet is a plain list of the remaining sections. */}
+      {openId === "__more__" && (
+        <div onMouseEnter={clearHover} onMouseLeave={hoverLeave} className="app-sheet pointer-events-auto mb-5 w-[min(90vw,20rem)] rounded-2xl border border-white/[0.09] bg-app-navy-card/95 p-1.5 shadow-2xl shadow-black/60 backdrop-blur-xl">
+          {overflow.map((s) => {
+            const Icon = s.icon;
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => setOpenId(s.id)}
+                className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[0.8125rem] text-ink-muted transition-colors duration-100 hover:bg-white/[0.04] hover:text-ink"
+              >
+                <Icon className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{s.label}</span>
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => logout()}
+            className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[0.8125rem] text-ink-faint transition-colors duration-100 hover:bg-white/[0.04] hover:text-app-red-text"
+          >
+            <LogOut className="h-3.5 w-3.5 shrink-0" />
+            <span>Sign out</span>
+          </button>
+        </div>
+      )}
+
+      <nav
+        className="app-tabbar pointer-events-auto mb-3.5 flex items-end gap-1.5 rounded-[1.2rem] border border-white/[0.1] bg-app-navy-card/85 px-1.5 py-1.5 shadow-2xl shadow-black/60 backdrop-blur-xl"
+        aria-label="Sections"
+      >
+        <Link href="/" className={"app-tab " + (activeHref === "/" ? "is-on" : "")}>
+          {(() => {
+            const Icon = NAV[0].icon;
+            return <Icon className="h-[1.25rem] w-[1.25rem]" />;
+          })()}
+          <span>Home</span>
+        </Link>
+
+        {primary.map((s, index) => {
+          const Icon = s.icon;
+          const on = activeSection === s.id;
+          const requestedHref = DEFAULT_SECTION_HREF[s.id];
+          const defaultHref = s.items.some((item) => item.href === requestedHref)
+            ? requestedHref
+            : s.items[0].href;
+          const sheetPosition = index < 2
+            ? "left-0"
+            : index >= primary.length - 2
+              ? "right-0"
+              : "left-1/2 -translate-x-1/2";
+          return (
+            <div key={s.id} className="relative">
+              {openId === s.id && (
+                <div
+                  onMouseEnter={clearHover}
+                  onMouseLeave={hoverLeave}
+                  className={`pointer-events-auto absolute bottom-[calc(100%+1.25rem)] ${sheetPosition} w-[min(90vw,24rem)]`}
+                >
+                  <div className="app-sheet rounded-2xl border border-white/[0.09] bg-app-navy-card/95 p-1.5 shadow-2xl shadow-black/60 backdrop-blur-xl">
+                    <p className="px-2.5 pb-1 pt-1 text-[0.625rem] font-medium uppercase tracking-wider text-ink-faint">
+                      {s.label}
+                    </p>
+                    <div className="grid grid-cols-2 gap-0.5">
+                      {s.items.map((item) => {
+                        const ItemIcon = item.icon;
+                        const itemOn = activeHref === item.href;
+                        return (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            className={
+                              "flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-[0.8125rem] transition-colors duration-100 " +
+                              (itemOn ? "bg-app-blue/[0.14] text-ink" : "text-ink-muted hover:bg-white/[0.04] hover:text-ink")
+                            }
+                          >
+                            <ItemIcon className={"h-3.5 w-3.5 shrink-0 " + (itemOn ? "text-app-blue" : "")} />
+                            <span className="truncate">{item.label}</span>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            )}
-            <Link href={section.pages[0].href} onClick={(event) => {
-              if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-              if (!window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
-                event.preventDefault(); clearTimer(); setOpen(expanded ? null : section.id);
-              } else close();
-            }} className={"able-tab " + (activeSection === section.id ? "is-on" : expanded ? "is-open" : "")} aria-current={activeSection === section.id ? "true" : undefined}>
-              <Icon aria-hidden="true" /><span>{section.label}</span>
-            </Link>
-            <button type="button" className="able-nav-disclosure" aria-label={"Show " + section.label + " pages"} aria-expanded={expanded} aria-controls={expanded ? "nav-" + section.id : undefined} onClick={() => { clearTimer(); setOpen(expanded ? null : section.id); }}>⌃</button>
-          </div>
-        );
-      })}
-    </nav>
+              )}
+
+              <Link
+                href={defaultHref}
+                scroll
+                onClick={() => { clearHover(); setOpenId(null); window.scrollTo({ top: 0, left: 0 }); }}
+                onMouseEnter={() => hoverOpen(s.id)}
+                onMouseLeave={hoverLeave}
+                // Full blue means "this is the page you are on". Merely opening the
+                // sheet gets the same quiet highlight as a hover, so raising a
+                // menu never looks like you already navigated.
+                className={"app-tab " + (on ? "is-on" : openId === s.id ? "is-open" : "")}
+              >
+                <Icon className="h-[1.25rem] w-[1.25rem]" />
+                <span>{s.label.replace("User ", "")}</span>
+              </Link>
+            </div>
+          );
+        })}
+
+        {overflow.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setOpenId((v) => (v === "__more__" ? null : "__more__"))}
+            className={
+              "app-tab " +
+              (openId === "__more__" || overflow.some((s) => s.id === activeSection) ? "is-on" : "")
+            }
+          >
+            <MoreHorizontal className="h-[1.25rem] w-[1.25rem]" />
+            <span>More</span>
+          </button>
+        )}
+
+        <span className="mx-1 h-8 w-px self-center bg-white/[0.1]" />
+
+        <AdminSettingsLink className="app-tab" label />
+
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new CustomEvent("app-open-palette"))}
+          className="app-tab"
+          title="Jump to a page  (⌘K)"
+        >
+          <Search className="h-[1.25rem] w-[1.25rem]" />
+          <span>Search</span>
+        </button>
+      </nav>
+    </div>
   );
 }

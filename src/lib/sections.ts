@@ -12,28 +12,28 @@
 export type SectionKey =
   | "dashboard"
   | "users"
-  | "financials"
   | "referral"
-  | "content"
-  | "ai"
   | "social"
   | "research"
   | "creators"
-  | "messaging";
+  | "growth"
+  | "admins";
 
 export const SECTIONS: { key: SectionKey; label: string; backend: boolean }[] = [
   { key: "dashboard", label: "Dashboard", backend: false }, // everyone; home overview
   { key: "users", label: "Users", backend: true },
-  { key: "financials", label: "Financials", backend: false },
   { key: "referral", label: "Referral Codes", backend: true },
-  { key: "content", label: "Content", backend: true },
-  { key: "ai", label: "AI", backend: true },
   { key: "social", label: "Social", backend: true },
   { key: "research", label: "Research", backend: false },
   { key: "creators", label: "Creators", backend: false },
   // User Messaging — campaigns/journeys, broadcasts and in-app banners, all
   // served by the NestJS backend (/admin/workflows + /admin/in-app-messages).
-  { key: "messaging", label: "User Messaging", backend: true },
+  // App-wide mobile config served by the backend's app-settings map
+  // (force-update minimums today, more later).
+  // Outward-facing measurement: store reviews and site traffic.
+  { key: "growth", label: "Growth", backend: true },
+  // Managing admin accounts and the permission catalog.
+  { key: "admins", label: "Admins", backend: true },
 ];
 
 export const ALL_SECTION_KEYS: SectionKey[] = SECTIONS.map((s) => s.key);
@@ -44,35 +44,23 @@ export function roleNeedsBackendToken(sections: string[]): boolean {
 }
 
 /** Map a pathname to its section key (longest-prefix wins). "dashboard" = "/". */
-const PATH_SECTION: { prefix: string; section: SectionKey }[] = [
+const PATH_SECTION: { prefix: string; section: string }[] = [
   { prefix: "/users", section: "users" },
-  { prefix: "/cancel-reasons", section: "users" },
   { prefix: "/user-analysis", section: "users" },
-  { prefix: "/free-codes", section: "users" },
-  { prefix: "/testimonials", section: "users" },
-  { prefix: "/fc-analysis", section: "users" },
-  { prefix: "/prayers", section: "users" },
-  { prefix: "/financials", section: "financials" },
-  { prefix: "/revenue", section: "financials" },
-  { prefix: "/expenses", section: "financials" },
-  { prefix: "/referral-codes", section: "referral" },
-  { prefix: "/inspirational-messages", section: "content" },
-  { prefix: "/supplications", section: "content" },
-  { prefix: "/quotes", section: "content" },
-  { prefix: "/ai", section: "ai" },
-  { prefix: "/circle", section: "social" },
-  { prefix: "/avatars", section: "social" },
-  { prefix: "/links", section: "social" },
-  { prefix: "/website", section: "social" },
-  { prefix: "/competitors", section: "research" },
-  { prefix: "/prospects", section: "research" },
   { prefix: "/creators", section: "creators" },
-  { prefix: "/messaging", section: "messaging" },
+  { prefix: "/referral-codes", section: "referral" },
+  // App: everything that configures what ships inside the app.
+  // Growth: how we look to the outside world.
+  { prefix: "/reviews", section: "reviews:read" },
+  { prefix: "/website", section: "social:read" },
+  { prefix: "/prospects", section: "research:read" },
+  { prefix: "/competitors", section: "research:read" },
+  { prefix: "/admins", section: "admins" },
 ];
 
-export function sectionForPath(pathname: string): SectionKey {
+export function sectionForPath(pathname: string): string {
   if (pathname === "/" ) return "dashboard";
-  let best: { prefix: string; section: SectionKey } | null = null;
+  let best: { prefix: string; section: string } | null = null;
   for (const m of PATH_SECTION) {
     if ((pathname === m.prefix || pathname.startsWith(m.prefix + "/")) && (!best || m.prefix.length > best.prefix.length)) best = m;
   }

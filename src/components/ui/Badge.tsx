@@ -2,11 +2,11 @@ import { cn } from "@/lib/utils";
 
 const variants: Record<string, string> = {
   default: "bg-white/[0.04] text-ink-muted",
-  success: "bg-emerald-500/15 text-emerald-300",
-  warning: "bg-amber-500/15 text-amber-300",
-  danger: "bg-rose-500/15 text-rose-300",
-  info: "bg-jp-blue/15 text-jp-blue-light",
-  purple: "bg-jp-purple/15 text-jp-purple",
+  success: "bg-app-green/15 text-app-green",
+  warning: "bg-app-orange/15 text-app-orange",
+  danger: "bg-app-red/20 text-app-red-text",
+  info: "bg-app-blue/15 text-app-blue-light",
+  purple: "bg-app-violet/20 text-app-violet-text",
 };
 
 export default function Badge({

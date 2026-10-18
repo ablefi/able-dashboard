@@ -1,34 +1,22 @@
 /**
- * Brand handles used for auto-approving creator posts.
+ * Everything app-specific in one place. Set these in `.env.local` (and in your
+ * host's environment settings); see `.env.example` for the full list.
  *
- * A scraped post is counted as sponsored work only when the caption contains a
- * real @mention of one of our accounts. Set these to Able's actual handles per
- * platform. Two things make this fiddly and both are handled below:
- *
- *  • the username can differ by platform (e.g. @able on one, @able.finance on
- *    another), so every valid handle goes in HANDLE_TOKENS;
- *  • TikTok often renders a mention as the DISPLAY NAME, so the caption text
- *    arrives as "@Able Finance" with a space rather than the username. That
- *    shape is matched by DISPLAY_MENTION.
- *
- * Everything is anchored on "@", so the brand name appearing as ordinary words
- * in a caption never auto-approves a post.
+ * The backend URLs are public: the browser calls them directly, so they are
+ * NEXT_PUBLIC_ and inlined at build time. Nothing secret belongs in here.
  */
+const list = (value: string | undefined, fallback: string[]) =>
+  value ? value.split(",").map((v) => v.trim()).filter(Boolean) : fallback;
 
-/** Exact @handle tokens, lowercase, no leading "@". */
-export const HANDLE_TOKENS = new Set<string>(["able", "ablefinance", "able.finance"]);
+export const BRAND = {
+  /** Shown in the sidebar, the login screen and the browser tab. */
+  name: process.env.NEXT_PUBLIC_APP_NAME || "Able",
+};
 
-/** Display-name form of the mention, e.g. "@Able Finance". */
-export const DISPLAY_MENTION = /@\s*able(\s+finance)?\b/i;
+/** Your backend (the API that owns users, referral codes and admin logins). */
+export const BACKEND_STAGING_URL = process.env.NEXT_PUBLIC_BACKEND_STAGING_URL || "https://api-staging.example.com";
+export const BACKEND_PRODUCTION_URL = process.env.NEXT_PUBLIC_BACKEND_PRODUCTION_URL || "https://api.example.com";
 
-/** Handle shown in the UI, e.g. on the Our Posts page. */
-export const PRIMARY_HANDLE = "@able";
-
-export function captionMentionsBrand(caption: string | null | undefined): boolean {
-  if (!caption) return false;
-  const c = caption.toLowerCase();
-  for (const m of c.matchAll(/@([a-z0-9_.]+)/g)) {
-    if (HANDLE_TOKENS.has(m[1].replace(/\.+$/, ""))) return true;
-  }
-  return DISPLAY_MENTION.test(c);
-}
+/** Hostnames that serve the PRODUCTION dashboard. Any other host (previews,
+ * localhost) talks to the staging backend, so a preview can never touch real data. */
+export const PRODUCTION_DASHBOARD_HOSTS = list(process.env.NEXT_PUBLIC_PRODUCTION_DASHBOARD_HOSTS, ["admin.example.com"]);

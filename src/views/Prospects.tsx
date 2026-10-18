@@ -11,6 +11,7 @@ import { TimeframeFilter } from "@/components/creators/TimeframeFilter";
 import { useCreatorTimeframe } from "@/components/creators/useCreatorTimeframe";
 import { PlatformPill } from "@/components/creators/PlatformBadge";
 import CreatorFormModal, { triggerAutoPull } from "@/components/creators/CreatorFormModal";
+import { creatorApi } from "@/lib/creatorMarketClient";
 
 interface Prospect {
   id: string; name: string; profile_image_url: string | null;
@@ -28,7 +29,7 @@ const authHeaders = (): Record<string, string> => {
 };
 const fmtCompact = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n));
 const fmtRel = (iso: string) => { const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400_000); return d <= 0 ? "today" : `${d}d ago`; };
-const inputCls = "rounded-lg border border-white/[0.08] bg-jp-navy-card/50 px-2.5 py-1.5 text-xs text-ink placeholder:text-ink-faint focus:border-jp-blue/45 focus:outline-none";
+const inputCls = "rounded-lg border border-white/[0.08] bg-app-navy-card/50 px-2.5 py-1.5 text-xs text-ink placeholder:text-ink-faint focus:border-app-blue/45 focus:outline-none";
 
 export default function Prospects() {
   const [data, setData] = useState<Prospect[]>([]);
@@ -44,7 +45,7 @@ export default function Prospects() {
   const authHdrs = (): Record<string, string> => { const t = typeof window !== "undefined" ? localStorage.getItem("token") : null; return t ? { Authorization: `Bearer ${t}` } : {}; };
   const act = async (action: string, id: string) => {
     setBusy(true);
-    const r = await fetch("/api/prospects", { method: "POST", headers: { "Content-Type": "application/json", ...authHdrs() }, body: JSON.stringify({ action, id }) }).then((x) => x.json()).catch(() => ({ ok: false }));
+    const r = await fetch(creatorApi("/api/prospects"), { method: "POST", headers: { "Content-Type": "application/json", ...authHdrs() }, body: JSON.stringify({ action, id }) }).then((x) => x.json()).catch(() => ({ ok: false }));
     setBusy(false);
     if (r.ok) { toast.success(action === "promote" ? "Promoted to creator" : "Deleted"); load(); } else toast.error(r.error || "Failed");
   };
@@ -60,7 +61,7 @@ export default function Prospects() {
       const { fromISO, toISO } = resolveTimeframe(tf);
       const p = new URLSearchParams({ from: fromISO, to: toISO });
       if (debounced) p.set("search", debounced);
-      const res = await fetch(`/api/prospects?${p}`, { headers: authHeaders() });
+      const res = await fetch(creatorApi(`/api/prospects?${p}`), { headers: authHeaders() });
       if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || `Failed (${res.status})`); }
       const d = await res.json();
       setData(d.prospects);
@@ -80,7 +81,7 @@ export default function Prospects() {
         subtitle={data.length === 0 ? "Creators you're evaluating before deciding to work with them." : `${data.length} prospect${data.length === 1 ? "" : "s"} · avg views over ${resolveTimeframe(tf).label.toLowerCase()}`}
         actions={
           <div className="flex items-center gap-2">
-            <button onClick={() => setAddOpen(true)} className="inline-flex items-center gap-1.5 rounded-xl bg-jp-blue px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-jp-blue-light">
+            <button onClick={() => setAddOpen(true)} className="inline-flex items-center gap-1.5 rounded-xl bg-app-blue px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-app-blue-light">
               <Plus className="h-4 w-4" /> Add prospect
             </button>
             <TimeframeFilter value={tf} onChange={setTf} />
@@ -98,24 +99,24 @@ export default function Prospects() {
         </div>
       </div>
 
-      {error && <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-300">{error}</div>}
+      {error && <div className="rounded-lg border border-app-red/30 bg-app-red/10 px-4 py-2.5 text-sm text-app-red-text">{error}</div>}
 
       {loading && data.length === 0 ? (
         <div className="flex items-center justify-center py-20 text-ink-muted"><Loader2 className="mr-2 h-6 w-6 animate-spin" /> Loading prospects…</div>
       ) : data.length === 0 ? (
-        <Empty title={debounced ? "No prospects match" : "No prospects yet"} description={debounced ? "Try a different search." : "Prospects are managed in the creators backend (tagged jp-prospect)."} />
+        <Empty title={debounced ? "No prospects match" : "No prospects yet"} description={debounced ? "Try a different search." : "Prospects are managed in the creators backend (tagged prospect)."} />
       ) : (
         <ul className={cn("space-y-2.5", loading && "opacity-60 transition-opacity")}>
           {data.map((p) => {
             const profile = p.instagram_handle ? `https://instagram.com/${p.instagram_handle}` : p.tiktok_handle ? `https://tiktok.com/@${p.tiktok_handle.replace(/^@/, "")}` : p.youtube_handle ? `https://youtube.com/${p.youtube_handle.startsWith("@") ? p.youtube_handle : "@" + p.youtube_handle}` : null;
             return (
-              <li key={p.id} className="overflow-hidden rounded-xl border border-white/[0.06] bg-jp-navy-card/40">
+              <li key={p.id} className="overflow-hidden rounded-xl border border-white/[0.06] bg-app-navy-card/40">
                 <div className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center">
                   <div className="flex min-w-0 flex-1 items-center gap-4">
                     <Avatar name={p.name} src={p.profile_image_url} />
                     <div className="min-w-0 flex-1">
                       {profile ? (
-                        <a href={profile} target="_blank" rel="noopener noreferrer" className="font-medium text-ink hover:text-jp-blue-light">{p.name}</a>
+                        <a href={profile} target="_blank" rel="noopener noreferrer" className="font-medium text-ink hover:text-app-blue-light">{p.name}</a>
                       ) : (
                         <span className="font-medium text-ink">{p.name}</span>
                       )}
@@ -133,14 +134,14 @@ export default function Prospects() {
                     <AvgCell label="TT avg" avg={p.tt_avg_views} count={p.tt_post_count} have={!!p.tiktok_handle} />
                     <AvgCell label="YT avg" avg={p.yt_avg_views} count={p.yt_post_count} have={!!p.youtube_handle} />
                     <div className="min-w-[64px] text-right">
-                      <div className="text-sm font-semibold num text-jp-gold">{p.total_posts > 0 ? fmtCompact(p.combined_avg_views) : "—"}</div>
+                      <div className="text-sm font-semibold num text-app-gold">{p.total_posts > 0 ? fmtCompact(p.combined_avg_views) : "-"}</div>
                       <div className="text-[10px] uppercase tracking-wider text-ink-faint">All avg</div>
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 sm:border-l sm:border-white/[0.06] sm:pl-3">
                     <button onClick={() => setEditing(p)} disabled={busy} title="Edit" className="inline-flex items-center gap-1 rounded-lg border border-white/[0.1] px-2 py-1 text-[11px] font-medium text-ink-muted hover:bg-white/[0.04] hover:text-ink disabled:opacity-50"><Pencil className="h-3 w-3" /></button>
-                    <button onClick={() => onPromote(p)} disabled={busy} title="Promote to creator" className="inline-flex items-center gap-1 rounded-lg border border-jp-blue/30 px-2 py-1 text-[11px] font-medium text-jp-blue-light hover:bg-jp-blue/15 disabled:opacity-50"><ArrowUpCircle className="h-3 w-3" /> Promote</button>
-                    <button onClick={() => onDelete(p)} disabled={busy} title="Delete" className="inline-flex items-center rounded-lg border border-rose-500/25 px-2 py-1 text-[11px] font-medium text-rose-300 hover:bg-rose-500/10 disabled:opacity-50"><Trash2 className="h-3 w-3" /></button>
+                    <button onClick={() => onPromote(p)} disabled={busy} title="Promote to creator" className="inline-flex items-center gap-1 rounded-lg border border-app-blue/30 px-2 py-1 text-[11px] font-medium text-app-blue-light hover:bg-app-blue/15 disabled:opacity-50"><ArrowUpCircle className="h-3 w-3" /> Promote</button>
+                    <button onClick={() => onDelete(p)} disabled={busy} title="Delete" className="inline-flex items-center rounded-lg border border-app-red/25 px-2 py-1 text-[11px] font-medium text-app-red-text hover:bg-app-red/10 disabled:opacity-50"><Trash2 className="h-3 w-3" /></button>
                   </div>
                 </div>
               </li>
@@ -156,7 +157,7 @@ function AvgCell({ label, avg, count, have }: { label: string; avg: number; coun
   return (
     <div className="min-w-[60px] text-right">
       <div className={cn("text-sm font-semibold num", !have ? "text-ink-faint/30" : count === 0 ? "text-ink-faint" : "text-ink")}>
-        {!have ? "—" : count === 0 ? "0" : fmtCompact(avg)}
+        {!have ? "-" : count === 0 ? "0" : fmtCompact(avg)}
       </div>
       <div className="text-[10px] uppercase tracking-wider text-ink-faint">{label}</div>
     </div>
@@ -169,5 +170,5 @@ function Avatar({ name, src }: { name: string; src: string | null }) {
     // eslint-disable-next-line @next/next/no-img-element
     return <img src={src} alt="" referrerPolicy="no-referrer" onError={() => setErr(true)} className="h-10 w-10 shrink-0 rounded-full object-cover" />;
   }
-  return <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-jp-blue/15 text-sm font-semibold text-jp-blue-light">{name.charAt(0).toUpperCase()}</div>;
+  return <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-app-blue/15 text-sm font-semibold text-app-blue-light">{name.charAt(0).toUpperCase()}</div>;
 }

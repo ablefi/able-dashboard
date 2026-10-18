@@ -23,7 +23,7 @@ function CheckBox({ state, onClick }: { state: "on" | "off" | "some"; onClick: (
       aria-checked={state === "on" ? true : state === "some" ? "mixed" : false}
       className={cn(
         "flex h-4 w-4 items-center justify-center rounded border transition-colors",
-        state === "off" ? "border-white/25 hover:border-white/40" : "border-jp-blue bg-jp-blue text-white",
+        state === "off" ? "border-white/25 hover:border-white/40" : "border-app-blue bg-app-blue text-white",
       )}
     >
       {state === "on" && <Check className="h-3 w-3" />}
@@ -40,6 +40,8 @@ export type Column<T> = {
   sortValue?: (row: T) => string | number;
   /** Initial column width (px). Default 150. */
   width?: number;
+  /** Minimum readable width, including when restoring saved column widths. */
+  minWidth?: number;
   align?: "left" | "right";
   /** false = don't clip/truncate cell content (e.g. an actions column). */
   clip?: boolean;
@@ -118,16 +120,16 @@ export function ColumnsButton<T>({
     <div className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex h-8 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-medium text-ink transition-colors hover:border-slate-300 hover:bg-slate-50"
+        className="inline-flex h-[2.125rem] items-center gap-1.5 rounded-xl border border-white/[0.12] bg-app-navy-card/60 px-3 text-[0.8125rem] font-medium text-white transition-colors hover:border-white/[0.22] hover:bg-app-navy-card"
       >
         <Columns3 className="h-3.5 w-3.5" />
         Columns
-        {hidden.size > 0 && <span className="rounded-full bg-jp-blue/20 px-1.5 text-[10px] text-jp-blue-light">{visibleCount}/{total}</span>}
+        {hidden.size > 0 && <span className="rounded-full bg-app-blue/20 px-1.5 text-[10px] text-app-blue-light">{visibleCount}/{total}</span>}
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 z-20 mt-1 max-h-80 w-56 overflow-y-auto rounded-xl border border-white/[0.1] bg-jp-navy-card p-1.5 shadow-2xl shadow-black/50">
+          <div className="absolute right-0 z-20 mt-1 max-h-80 w-56 overflow-y-auto rounded-xl border border-white/[0.1] bg-app-navy-card p-1.5 shadow-2xl shadow-black/50">
             {columns.map((c) => {
               if (c.hideable === false) return null;
               const visible = !hidden.has(c.key);
@@ -137,7 +139,7 @@ export function ColumnsButton<T>({
                   onClick={() => toggleHidden(c.key)}
                   className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm text-ink-muted transition-colors hover:bg-white/[0.04] hover:text-ink"
                 >
-                  <span className={cn("flex h-4 w-4 items-center justify-center rounded border", visible ? "border-jp-blue bg-jp-blue text-white" : "border-white/20")}>
+                  <span className={cn("flex h-4 w-4 items-center justify-center rounded border", visible ? "border-app-blue bg-app-blue text-white" : "border-white/20")}>
                     {visible && <Check className="h-3 w-3" />}
                   </span>
                   <span className="truncate">{c.header || c.key}</span>
@@ -184,7 +186,13 @@ export default function DataTable<T>({
   const resizing = useRef<{ key: string; startX: number; startW: number } | null>(null);
 
   const visibleColumns = useMemo(() => columns.filter((c) => !hidden.has(c.key)), [columns, hidden]);
-  const widthOf = (c: Column<T>) => widths[c.key] ?? c.width ?? 150;
+  // Keep complete words readable even when older saved widths are too narrow.
+  // Multiword labels can wrap, without splitting “Duration” or “Subscribed”.
+  const widthOf = (c: Column<T>) => Math.max(
+    Math.max(0, ...c.header.split(/\s+/).map((word) => word.length)) * 9 + (c.sortValue ? 48 : 32),
+    c.minWidth ?? 0,
+    widths[c.key] ?? c.width ?? 150,
+  );
 
   const onResizeStart = (e: React.MouseEvent, key: string, current: number) => {
     e.preventDefault();
@@ -238,7 +246,7 @@ export default function DataTable<T>({
     !selection || rowIds.length === 0 || selectedHere === 0 ? "off" : selectedHere === rowIds.length ? "on" : "some";
 
   return (
-    <div className={cn("overflow-x-auto", className)}>
+    <div className={cn("max-h-[70vh] overflow-auto", className)}>
       <table className="text-sm" style={{ tableLayout: "fixed", width: totalWidth, minWidth: "100%" }}>
         <colgroup>
           {selection && <col style={{ width: SEL_W }} />}
@@ -246,7 +254,7 @@ export default function DataTable<T>({
             <col key={c.key} style={{ width: widthOf(c) }} />
           ))}
         </colgroup>
-        <thead>
+        <thead className="sticky top-0 z-10 bg-app-navy-card">
           <tr className="border-b border-white/[0.06] text-left">
             {selection && (
               <th className="px-4 py-3">
@@ -261,7 +269,7 @@ export default function DataTable<T>({
                     className={cn("flex items-center gap-1", c.align === "right" && "justify-end", c.sortValue && "cursor-pointer hover:text-ink-muted")}
                     onClick={() => toggleSort(c)}
                   >
-                    <span className="truncate">{c.header}</span>
+                    <span className="min-w-0 whitespace-normal break-normal leading-snug">{c.header}</span>
                     {c.sortValue &&
                       (active ? (
                         sort!.dir === "asc" ? <ArrowUp className="h-3 w-3 shrink-0" /> : <ArrowDown className="h-3 w-3 shrink-0" />
@@ -269,21 +277,29 @@ export default function DataTable<T>({
                         <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-40" />
                       ))}
                   </div>
-                  <div onMouseDown={(e) => onResizeStart(e, c.key, widthOf(c))} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-jp-blue/40" />
+                  <div onMouseDown={(e) => onResizeStart(e, c.key, widthOf(c))} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-app-blue/40" />
                 </th>
               );
             })}
           </tr>
         </thead>
         <tbody>
-          {/* No row dividers and no hover highlight — Adam wants the rows clean. */}
+          {/* Row actions leave nested controls independent. */}
           {sorted.map((row, i) => {
             const id = rowKey(row);
             return (
             <tr
               key={id}
-              className={cn("text-ink-muted", onRowClick && "cursor-pointer", selection?.selectedIds.has(id) && "bg-jp-blue/[0.06]")}
-              onClick={onRowClick ? () => onRowClick(row) : undefined}
+              className={cn("text-ink-muted", onRowClick && "cursor-pointer", selection?.selectedIds.has(id) && "bg-app-blue/[0.06]")}
+              data-row-action={onRowClick ? "open" : undefined}
+              data-selected={selection?.selectedIds.has(id) || undefined}
+              tabIndex={onRowClick ? 0 : undefined}
+              onClick={onRowClick ? (event) => {
+                if (!(event.target as Element).closest("button,a,input,select,textarea,[role=button],[role=menuitem],[data-row-action-ignore]")) onRowClick(row);
+              } : undefined}
+              onKeyDown={onRowClick ? (event) => {
+                if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onRowClick(row); }
+              } : undefined}
             >
               {selection && (
                 <td className="px-4 py-3 align-middle">

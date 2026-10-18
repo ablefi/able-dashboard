@@ -12,6 +12,7 @@ import { slugForCreator, type CreatorType } from "@/lib/creators";
 import { PlatformBadge } from "@/components/creators/PlatformBadge";
 import { OutlierAdminControls } from "@/components/creators/OutlierAdminControls";
 import { ExpandableCaption, thumbUrl, fmtCompact, fmtRelative } from "@/components/creators/PostBits";
+import { creatorApi, useCreatorSection } from "@/lib/creatorMarketClient";
 
 interface FeedPost {
   id: string; platform: "instagram" | "tiktok" | "youtube"; url: string; thumbnail_url: string | null;
@@ -25,7 +26,9 @@ const authHeaders = (): Record<string, string> => {
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
-export default function Outliers() {
+/** `embedded`: rendered as the Outliers tab inside Posts, so no page header. */
+export default function Outliers({ embedded = false }: { embedded?: boolean } = {}) {
+  const { ar } = useCreatorSection();
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -38,12 +41,12 @@ export default function Outliers() {
     if (!/^https?:\/\//.test(url.trim())) { toast.error("Paste a full https:// URL"); return; }
     setAdding(true);
     try {
-      const r = await fetch("/api/creators/outliers", { method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() }, body: JSON.stringify({ action: "add_manual", url: url.trim(), note: note.trim() }) });
+      const r = await fetch(creatorApi("/api/creators/outliers"), { method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() }, body: JSON.stringify({ action: "add_manual", url: url.trim(), note: note.trim() }) });
       const d = await r.json();
       if (!r.ok || d.ok === false) throw new Error(d.error || "Failed");
       // Kick off the archive (downloads the video + backfills metadata).
-      if (d.postId) fetch("/api/creators/outliers", { method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() }, body: JSON.stringify({ action: "archive", id: d.postId }) }).catch(() => {});
-      toast.success("Outlier added — archiving in the background");
+      if (d.postId) fetch(creatorApi("/api/creators/outliers"), { method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() }, body: JSON.stringify({ action: "archive", id: d.postId }) }).catch(() => {});
+      toast.success("Outlier added, archiving in the background");
       setAddOpen(false); setUrl(""); setNote("");
       setTimeout(load, 800);
     } catch (e) {
@@ -57,7 +60,7 @@ export default function Outliers() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/creators/posts?state=outliers&days=3650&sort=views`, { headers: authHeaders() });
+      const res = await fetch(creatorApi(`/api/creators/posts?state=outliers&days=3650&sort=views`), { headers: authHeaders() });
       if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || `Failed (${res.status})`); }
       const d = await res.json();
       setPosts(d.feed);
@@ -71,23 +74,34 @@ export default function Outliers() {
   useEffect(() => { load(); }, [load]);
 
   const unstar = async (id: string) => {
-    setPosts((prev) => prev.filter((p) => p.id !== id)); // optimistic — leaves the grid
+    setPosts((prev) => prev.filter((p) => p.id !== id)); // optimistic, leaves the grid
     try {
-      await fetch("/api/creators/posts", { method: "PATCH", headers: { "Content-Type": "application/json", ...authHeaders() }, body: JSON.stringify({ id, field: "is_outlier", value: false }) });
+      await fetch(creatorApi("/api/creators/posts"), { method: "PATCH", headers: { "Content-Type": "application/json", ...authHeaders() }, body: JSON.stringify({ id, field: "is_outlier", value: false }) });
     } catch { load(); }
   };
 
+  // Add by URL resolves its creator from the link, which may be English, so
+  // it is a main Creators section action for now (the API refuses it for the second market).
+  const addButton = ar ? null : (
+    <button onClick={() => setAddOpen(true)} className="inline-flex items-center gap-1.5 rounded-xl bg-app-blue px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-app-blue-light">
+      <Plus className="h-4 w-4" /> Add by URL
+    </button>
+  );
+
   return (
     <div className="space-y-4">
-      <PageHeader
-        title="Outliers"
-        subtitle={`${posts.length} starred post${posts.length === 1 ? "" : "s"} across the roster · all-time`}
-        actions={
-          <button onClick={() => setAddOpen(true)} className="inline-flex items-center gap-1.5 rounded-xl bg-jp-blue px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-jp-blue-light">
-            <Plus className="h-4 w-4" /> Add by URL
-          </button>
-        }
-      />
+      {embedded ? (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-ink-muted">{posts.length} starred post{posts.length === 1 ? "" : "s"} across creators · all-time</p>
+          {addButton}
+        </div>
+      ) : (
+        <PageHeader
+          title="Outliers"
+          subtitle={`${posts.length} starred post${posts.length === 1 ? "" : "s"} across the roster · all-time`}
+          actions={addButton}
+        />
+      )}
 
       <Modal
         open={addOpen}
@@ -102,23 +116,23 @@ export default function Outliers() {
       >
         <div className="space-y-3">
           <div>
-            <label className="mb-1 block text-xs font-medium text-ink-muted">Post URL <span className="text-rose-400">*</span></label>
-            <input className="w-full rounded-lg border border-white/[0.08] bg-jp-navy-light/60 px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-jp-blue/45 focus:outline-none" placeholder="https://www.tiktok.com/@user/video/… or instagram.com/reel/…" value={url} onChange={(e) => setUrl(e.target.value)} />
+            <label className="mb-1 block text-xs font-medium text-ink-muted">Post URL <span className="text-app-red-text">*</span></label>
+            <input className="w-full rounded-lg border border-white/[0.08] bg-app-navy-light/60 px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-app-blue/45 focus:outline-none" placeholder="https://www.tiktok.com/@user/video/… or instagram.com/reel/…" value={url} onChange={(e) => setUrl(e.target.value)} />
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-ink-muted">Note (optional)</label>
-            <input className="w-full rounded-lg border border-white/[0.08] bg-jp-navy-light/60 px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-jp-blue/45 focus:outline-none" placeholder="why this is an outlier…" value={note} onChange={(e) => setNote(e.target.value)} />
+            <input className="w-full rounded-lg border border-white/[0.08] bg-app-navy-light/60 px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-app-blue/45 focus:outline-none" placeholder="why this is an outlier…" value={note} onChange={(e) => setNote(e.target.value)} />
           </div>
           <p className="text-[11px] text-ink-faint">We'll auto-resolve the creator (TikTok URLs carry the @handle; others land under "External") and archive the video so it's ready to publish.</p>
         </div>
       </Modal>
 
-      {error && <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-300">{error}</div>}
+      {error && <div className="rounded-lg border border-app-red/30 bg-app-red/10 px-4 py-2.5 text-sm text-app-red-text">{error}</div>}
 
       {loading && posts.length === 0 ? (
         <div className="flex items-center justify-center py-20 text-ink-muted"><Loader2 className="mr-2 h-6 w-6 animate-spin" /> Loading outliers…</div>
       ) : posts.length === 0 ? (
-        <Empty title="No outliers yet" description="Star a post from the Posts tab (the gold star) — top-performing posts collect here." icon={<Star className="h-5 w-5 text-jp-gold" />} />
+        <Empty title="No outliers yet" description="Star a post from the Posts tab (the gold star), top-performing posts collect here." icon={<Star className="h-5 w-5 text-app-gold" />} />
       ) : (
         <div className="flex flex-wrap justify-start gap-4">
           {posts.map((p) => (
@@ -133,12 +147,13 @@ export default function Outliers() {
 }
 
 function OutlierCard({ p, onUnstar }: { p: FeedPost; onUnstar: () => void }) {
+  const { base: creatorsBase } = useCreatorSection();
   const [err, setErr] = useState(false);
   const t = thumbUrl(p);
   const slug = slugForCreator(p.creator);
   return (
-    <div className="overflow-hidden rounded-xl border border-white/[0.06] bg-jp-navy-card/40 ring-1 ring-jp-gold/30 transition-all hover:-translate-y-0.5 hover:border-jp-gold/40 hover:shadow-[0_8px_24px_-12px_rgba(245,158,11,0.4)]">
-      <div className="relative aspect-[9/13] bg-jp-navy-light/40">
+    <div className="overflow-hidden rounded-xl border border-white/[0.06] bg-app-navy-card/40 ring-1 ring-app-gold/30 transition-all hover:-translate-y-0.5 hover:border-app-gold/40 hover:shadow-[0_8px_24px_-12px_rgba(245,158,11,0.4)]">
+      <div className="relative aspect-[9/13] bg-app-navy-light/40">
         <a href={p.url} target="_blank" rel="noopener noreferrer" className="block h-full w-full" aria-label="Open post">
           {t && !err ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -151,13 +166,13 @@ function OutlierCard({ p, onUnstar }: { p: FeedPost; onUnstar: () => void }) {
         <button
           onClick={onUnstar}
           title="Remove from outliers"
-          className="absolute right-1.5 top-1.5 z-10 inline-flex h-7 w-7 items-center justify-center rounded-full bg-jp-gold/95 text-jp-navy shadow-md shadow-jp-gold/40 backdrop-blur-md transition-all hover:bg-jp-gold"
+          className="absolute right-1.5 top-1.5 z-10 inline-flex h-7 w-7 items-center justify-center rounded-full bg-app-gold/95 text-app-navy shadow-md shadow-app-gold/40 backdrop-blur-md transition-all hover:bg-app-gold"
         >
           <Star className="h-3.5 w-3.5 fill-current" />
         </button>
       </div>
       <div className="p-2.5">
-        <Link href={`/creators/${slug}`} className="inline-flex items-center gap-1.5 text-[11px] text-ink-muted hover:text-ink">
+        <Link href={`${creatorsBase}/${slug}`} className="inline-flex items-center gap-1.5 text-[11px] text-ink-muted hover:text-ink">
           <span className="truncate">{p.creator.name}</span>
         </Link>
         <ExpandableCaption text={p.caption} className="mt-1.5 text-[11px] leading-snug text-ink" />

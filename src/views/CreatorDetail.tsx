@@ -18,15 +18,19 @@ import { PlatformBadge, PlatformPill } from "@/components/creators/PlatformBadge
 import { PostCard, type CardPost } from "@/components/creators/PostCard";
 import { RefreshButton } from "@/components/creators/RefreshButton";
 import CreatorFormModal, { triggerAutoPull } from "@/components/creators/CreatorFormModal";
+import Modal from "@/components/ui/Modal";
+import Button from "@/components/ui/Button";
 import { AudienceCountriesChart } from "@/components/creators/AudienceCountriesChart";
 import { fmtCompact, fmtRelative } from "@/components/creators/PostBits";
+import { CreatorAttributionCard, CreatorDemographics, InfoDot, useAttribution, attributionFor as heardAttributionFor, missingAnswerPlatform } from "@/components/creators/attribution";
+import { creatorApi, useCreatorSection } from "@/lib/creatorMarketClient";
 
 const authH = (): Record<string, string> => {
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 async function manage(body: Record<string, unknown>) {
-  const r = await fetch("/api/creators/manage", { method: "POST", headers: { "Content-Type": "application/json", ...authH() }, body: JSON.stringify(body) });
+  const r = await fetch(creatorApi("/api/creators/manage"), { method: "POST", headers: { "Content-Type": "application/json", ...authH() }, body: JSON.stringify(body) });
   return r.json().catch(() => ({ ok: false }));
 }
 
@@ -38,7 +42,7 @@ function ActionBtn({ onClick, icon, label, disabled, danger }: { onClick: () => 
       disabled={disabled}
       className={cn(
         "inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium transition-colors disabled:opacity-50",
-        danger ? "border-rose-500/25 text-rose-300 hover:bg-rose-500/10" : "border-white/[0.1] text-ink-muted hover:bg-white/[0.04] hover:text-ink",
+        danger ? "border-app-red/25 text-app-red-text hover:bg-app-red/10" : "border-white/[0.1] text-ink-muted hover:bg-white/[0.04] hover:text-ink",
       )}
     >
       {icon}{label}
@@ -81,8 +85,8 @@ const PLATFORM_META: { key: PlatformKey; label: string; color: string }[] = [
   { key: "youtube", label: "YouTube", color: "#ef4444" },
 ];
 const TOOLTIP_STYLE = {
-  contentStyle: { backgroundColor: "#ffffff", border: "1px solid #dce4df", borderRadius: "8px" },
-  labelStyle: { color: "#17231e" }, itemStyle: { color: "#17231e" },
+  contentStyle: { backgroundColor: "#15203a", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "8px" },
+  labelStyle: { color: "#f0f4f8" }, itemStyle: { color: "#f0f4f8" },
 };
 const authHeaders = (): Record<string, string> => {
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
@@ -96,12 +100,12 @@ function flag(code: string | null): string {
 const handleUrl = (platform: "instagram" | "tiktok" | "youtube", h: string) =>
   platform === "instagram" ? `https://instagram.com/${h}` : platform === "tiktok" ? `https://tiktok.com/@${h.replace(/^@/, "")}` : `https://youtube.com/${h.startsWith("@") ? h : "@" + h}`;
 
-const selectCls = "rounded-lg border border-white/[0.08] bg-jp-navy-card/50 px-2.5 py-1.5 text-xs text-ink focus:border-jp-blue/45 focus:outline-none";
+const selectCls = "rounded-lg border border-white/[0.08] bg-app-navy-card/50 px-2.5 py-1.5 text-xs text-ink focus:border-app-blue/45 focus:outline-none";
 
 function TypePill({ type, size = "md" }: { type: CreatorType; size?: "sm" | "md" }) {
   const isPersona = type === "persona";
   return (
-    <span className={cn("rounded-md font-medium uppercase tracking-wide", size === "sm" ? "px-1 py-0.5 text-[9px]" : "px-1.5 py-0.5 text-[10px]", isPersona ? "bg-jp-purple/15 text-jp-purple" : "bg-white/[0.06] text-ink-muted")}>
+    <span className={cn("rounded-md font-medium uppercase tracking-wide", size === "sm" ? "px-1 py-0.5 text-[9px]" : "px-1.5 py-0.5 text-[10px]", isPersona ? "bg-app-purple/15 text-app-purple" : "bg-white/[0.06] text-ink-muted")}>
       {isPersona && <Users2 className="mr-0.5 inline h-2.5 w-2.5" />}{TYPE_LABEL[type] || type}
     </span>
   );
@@ -114,13 +118,13 @@ function GranularityToggle({ value, onChange }: { value: Granularity; onChange: 
     { key: "month", label: "Monthly" },
   ];
   return (
-    <div className="inline-flex rounded-xl border border-jp-blue/20 bg-jp-navy-card/50 p-0.5">
+    <div className="inline-flex rounded-xl border border-app-blue/20 bg-app-navy-card/50 p-0.5">
       {OPTIONS.map((opt) => (
         <button
           key={opt.key}
           type="button"
           onClick={() => onChange(opt.key)}
-          className={cn("rounded-lg px-3 py-1.5 text-xs font-medium transition-all", value === opt.key ? "bg-jp-blue text-white shadow-sm shadow-jp-blue/40" : "text-ink-muted hover:text-ink")}
+          className={cn("rounded-lg px-3 py-1.5 text-xs font-medium transition-all", value === opt.key ? "bg-app-blue text-white shadow-sm shadow-app-blue/40" : "text-ink-muted hover:text-ink")}
         >
           {opt.label}
         </button>
@@ -129,16 +133,24 @@ function GranularityToggle({ value, onChange }: { value: Granularity; onChange: 
   );
 }
 
-function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+function Stat({ label, value, accent, hint }: { label: string; value: string; accent?: boolean; hint?: string }) {
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-jp-navy-card/40 px-4 py-3">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">{label}</div>
-      <div className={cn("mt-1 text-2xl font-semibold num", accent ? "text-jp-blue-light" : "text-ink")}>{value}</div>
+    <div className="rounded-xl border border-white/[0.06] bg-app-navy-card/40 px-4 py-3">
+      {/* nowrap: see the note on the shared Stat. A wrapped label stretches
+          its grid row and breaks the alignment with the attribution column. */}
+      <div className="flex items-center gap-1 whitespace-nowrap text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
+        {label}
+        {hint && <InfoDot text={hint} />}
+      </div>
+      <div className={cn("mt-1 text-2xl font-semibold num", accent ? "text-app-blue-light" : "text-ink")}>{value}</div>
     </div>
   );
 }
 
 export default function CreatorDetail({ slug }: { slug: string }) {
+  const { base: creatorsBase } = useCreatorSection();
+  // Who named this creator in onboarding, and what those people look like.
+  const { data: attributionData, loading: attributionLoading } = useAttribution();
   const [data, setData] = useState<DetailData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -148,17 +160,18 @@ export default function CreatorDetail({ slug }: { slug: string }) {
   const [account, setAccount] = useState("");
   const [platformFilter, setPlatformFilter] = useState("all");
   const [editOpen, setEditOpen] = useState(false);
+  const [personas, setPersonas] = useState<{ id: string; name: string }[]>([]);
   const [addChildOpen, setAddChildOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   // Sort persists across creators (localStorage) so an "find best videos"
   // sweep keeps Most-views active as you click through the roster.
   const [sort, setSort] = useState<"recent" | "views">("recent");
   useEffect(() => {
-    try { const s = localStorage.getItem("jp-creator-detail-sort"); if (s === "views" || s === "recent") setSort(s); } catch { /* ignore */ }
+    try { const s = localStorage.getItem("app-creator-detail-sort"); if (s === "views" || s === "recent") setSort(s); } catch { /* ignore */ }
   }, []);
   const changeSort = (s: "recent" | "views") => {
     setSort(s);
-    try { localStorage.setItem("jp-creator-detail-sort", s); } catch { /* ignore */ }
+    try { localStorage.setItem("app-creator-detail-sort", s); } catch { /* ignore */ }
   };
 
   const cacheKey = useMemo(
@@ -180,7 +193,7 @@ export default function CreatorDetail({ slug }: { slug: string }) {
       const { fromISO, toISO } = resolveTimeframe(tf);
       const p = new URLSearchParams({ from: fromISO, to: toISO, granularity });
       if (account) p.set("account", account);
-      const res = await fetch(`/api/creators/${encodeURIComponent(slug)}?${p}`, { headers: authHeaders() });
+      const res = await fetch(creatorApi(`/api/creators/${encodeURIComponent(slug)}?${p}`), { headers: authHeaders() });
       if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || `Failed (${res.status})`); }
       const d = (await res.json()) as DetailData;
       setData(d);
@@ -215,7 +228,7 @@ export default function CreatorDetail({ slug }: { slug: string }) {
   const granLabel = granularity === "week" ? "Weekly" : granularity === "month" ? "Monthly" : "Daily";
 
   // YT Shorts vs long-form Videos vs Community split — same URL-shape rules
-  // as jp-creators. Non-YT posts always land in Shorts.
+  // as roster. Non-YT posts always land in Shorts.
   const groups = useMemo(() => {
     if (!data) return { shorts: [] as DetailPost[], videos: [] as DetailPost[], community: [] as DetailPost[] };
     const base = platformFilter === "all" ? data.posts : data.posts.filter((p) => p.platform === platformFilter);
@@ -250,12 +263,39 @@ export default function CreatorDetail({ slug }: { slug: string }) {
     setBusy(false);
     if (r.ok) { toast.success(archived ? "Unarchived" : "Archived"); load(); } else toast.error(r.error || "Failed");
   };
+  /** Deleting a creator takes their posts with it and cannot be undone, so it
+   *  asks in the dashboard's own modal rather than a browser confirm() that
+   *  looks like a phishing popup and says nothing about what is being lost. */
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; isChild: boolean; name: string } | null>(null);
+
   const doDelete = async (id: string, isChild: boolean) => {
-    if (!confirm(isChild ? "Delete this account and all its posts? This cannot be undone." : "Permanently delete this creator and all posts? This cannot be undone.")) return;
+    setDeleteTarget(null);
     setBusy(true);
     const r = await manage({ action: "delete", id, force: true });
     setBusy(false);
-    if (r.ok) { toast.success("Deleted"); if (isChild) load(); else window.location.assign("/creators"); } else toast.error(r.error || "Failed");
+    if (r.ok) { toast.success("Deleted"); if (isChild) load(); else window.location.assign(creatorsBase); } else toast.error(r.error || "Failed");
+  };
+  const openEdit = async () => {
+    if (!data) return;
+    if (data.creator.type === "persona") { setEditOpen(true); return; }
+    setBusy(true);
+    try {
+      const response = await fetch(creatorApi("/api/creators?type=persona&status=all"), { headers: authH() });
+      if (!response.ok) throw new Error("Could not load personas. Please try again.");
+      const result = await response.json();
+      if (!Array.isArray(result.creators)) throw new Error("Could not load personas. Please try again.");
+      const options = result.creators.map((persona: { id: string; name: string }) => ({ id: persona.id, name: persona.name }));
+      // Keep an existing parent selected even if it is absent from the roster.
+      if (data.creator.parent_id && !options.some((persona: { id: string }) => persona.id === data.creator.parent_id)) {
+        options.push({ id: data.creator.parent_id, name: data.parent?.name || "Current persona" });
+      }
+      setPersonas(options);
+      setEditOpen(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not load personas.");
+    } finally {
+      setBusy(false);
+    }
   };
   const doDetach = async (id: string) => {
     setBusy(true);
@@ -266,7 +306,7 @@ export default function CreatorDetail({ slug }: { slug: string }) {
   const doRefreshProfile = async (id: string) => {
     setBusy(true);
     const tid = toast.loading("Refreshing avatar…");
-    const r = await fetch("/api/creators/profile", { method: "POST", headers: { "Content-Type": "application/json", ...authH() }, body: JSON.stringify({ action: "profile", id }) }).then((x) => x.json()).catch(() => ({ ok: false }));
+    const r = await fetch(creatorApi("/api/creators/profile"), { method: "POST", headers: { "Content-Type": "application/json", ...authH() }, body: JSON.stringify({ action: "profile", id }) }).then((x) => x.json()).catch(() => ({ ok: false }));
     setBusy(false);
     toast.update(tid, { render: r.ok ? "Avatar refreshed" : r.error || "Failed", type: r.ok ? "success" : "error", isLoading: false, autoClose: 3500 });
     if (r.ok) load();
@@ -274,7 +314,7 @@ export default function CreatorDetail({ slug }: { slug: string }) {
   const doAudience = async (id: string) => {
     setBusy(true);
     const tid = toast.loading("Pulling audience (≈26 credits)…");
-    const r = await fetch("/api/creators/profile", { method: "POST", headers: { "Content-Type": "application/json", ...authH() }, body: JSON.stringify({ action: "audience", id }) }).then((x) => x.json()).catch(() => ({ ok: false }));
+    const r = await fetch(creatorApi("/api/creators/profile"), { method: "POST", headers: { "Content-Type": "application/json", ...authH() }, body: JSON.stringify({ action: "audience", id }) }).then((x) => x.json()).catch(() => ({ ok: false }));
     setBusy(false);
     toast.update(tid, { render: r.ok ? "Audience pulled" : r.error || "Failed", type: r.ok ? "success" : "error", isLoading: false, autoClose: 4000 });
     if (r.ok) load();
@@ -283,8 +323,8 @@ export default function CreatorDetail({ slug }: { slug: string }) {
   if (loading && !data) return <div className="flex items-center justify-center py-20 text-ink-muted"><Loader2 className="mr-2 h-6 w-6 animate-spin" /> Loading creator…</div>;
   if (error) return (
     <div className="space-y-4">
-      <Link href="/creators" className="inline-flex items-center gap-1.5 text-sm text-ink-muted hover:text-ink"><ArrowLeft className="h-4 w-4" /> All creators</Link>
-      <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-300">{error}</div>
+      <Link href={creatorsBase} className="inline-flex items-center gap-1.5 text-sm text-ink-muted hover:text-ink"><ArrowLeft className="h-4 w-4" /> All creators</Link>
+      <div className="rounded-lg border border-app-red/30 bg-app-red/10 px-4 py-2.5 text-sm text-app-red-text">{error}</div>
     </div>
   );
   if (!data) return null;
@@ -335,7 +375,6 @@ export default function CreatorDetail({ slug }: { slug: string }) {
     <section className="mt-10" key="videos">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">YouTube videos ({groups.videos.length})</h2>
-        <span className="text-[11px] text-ink-faint">Long-form · /watch?v=</span>
       </div>
       <div className="mt-3 flex flex-wrap justify-start gap-4">
         {groups.videos.map((p) => (
@@ -365,13 +404,13 @@ export default function CreatorDetail({ slug }: { slug: string }) {
 
   return (
     <div className={cn(loading && "opacity-60 transition-opacity")}>
-      <Link href="/creators" className="inline-flex items-center gap-1 text-xs text-ink-muted hover:text-ink"><ArrowLeft className="h-3 w-3" /> All creators</Link>
+      <Link href={creatorsBase} className="inline-flex items-center gap-1 text-xs text-ink-muted hover:text-ink"><ArrowLeft className="h-3 w-3" /> All creators</Link>
 
       {parent && (
-        <div className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-jp-purple/15 px-2 py-1 text-[11px] text-jp-purple ring-1 ring-inset ring-jp-purple/30">
+        <div className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-app-purple/15 px-2 py-1 text-[11px] text-app-purple ring-1 ring-inset ring-app-purple/30">
           <Users2 className="h-3 w-3" />
           <span className="font-medium uppercase tracking-wider">Account of</span>
-          <Link href={`/creators/${parent.slug}`} className="font-semibold underline-offset-2 hover:underline">{parent.name}</Link>
+          <Link href={`${creatorsBase}/${parent.slug}`} className="font-semibold underline-offset-2 hover:underline">{parent.name}</Link>
         </div>
       )}
 
@@ -386,45 +425,58 @@ export default function CreatorDetail({ slug }: { slug: string }) {
         <div className="min-w-0 flex-1 space-y-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <h1 className="text-2xl font-semibold tracking-tight text-ink">{c.name}</h1>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
+              {/* Name row: the name, its type, and the platform marks. The
+                  handle text is gone on purpose — it repeated what the icon
+                  already says and pushed the useful chips onto another line.
+                  Each icon still links out to that account. */}
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-2xl font-semibold tracking-tight text-ink">{c.name}</h1>
+                <TypePill type={c.type} />
+                {c.region && <span className="text-sm">{flag(c.region)}</span>}
                 {!isPersona && (["instagram", "tiktok", "youtube"] as const).map((pl) =>
                   c[`${pl}_handle`] ? (
-                    <a key={pl} href={handleUrl(pl, c[`${pl}_handle`] as string)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 hover:opacity-80">
+                    <a
+                      key={pl}
+                      href={handleUrl(pl, c[`${pl}_handle`] as string)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={c[`${pl}_handle`] as string}
+                      className="inline-flex items-center hover:opacity-80"
+                    >
                       <PlatformBadge platform={pl} />
-                      <span className="text-[10px] font-medium text-ink-faint">{c[`${pl}_handle`]}</span>
                     </a>
                   ) : null
                 )}
-                <TypePill type={c.type} />
-                {c.region && <span className="text-sm">{flag(c.region)}</span>}
                 {isPersona && <span className="text-xs text-ink-muted">{(accounts ?? []).length} {(accounts ?? []).length === 1 ? "account" : "accounts"}</span>}
                 {c.status === "archived" && (
-                  <span className="rounded-md bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wider text-amber-300 ring-1 ring-inset ring-amber-500/30">Archived</span>
+                  <span className="rounded-md bg-app-orange/15 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wider text-app-orange ring-1 ring-inset ring-app-orange/30">Archived</span>
                 )}
               </div>
-              {c.last_scraped_at && <p className="mt-1 text-[11px] text-ink-faint">Last refreshed {fmtRelative(c.last_scraped_at)}</p>}
 
-              {/* Management actions */}
+              {/* Management actions, with the refresh time riding the end of
+                  the row instead of taking a line to itself. */}
               <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                <ActionBtn onClick={() => setEditOpen(true)} icon={<Pencil className="h-3 w-3" />} label="Edit" disabled={busy} />
+                <ActionBtn onClick={openEdit} icon={<Pencil className="h-3 w-3" />} label="Edit" disabled={busy} />
                 {!isPersona && <ActionBtn onClick={() => doRefreshProfile(c.id)} icon={<ImageDown className="h-3 w-3" />} label="Refresh avatar" disabled={busy} />}
                 {!isPersona && c.tiktok_handle && <ActionBtn onClick={() => doAudience(c.id)} icon={<Globe2 className="h-3 w-3" />} label="Audience" disabled={busy} />}
                 <ActionBtn onClick={() => doArchive(c.id, c.status === "archived")} icon={c.status === "archived" ? <ArchiveRestore className="h-3 w-3" /> : <Archive className="h-3 w-3" />} label={c.status === "archived" ? "Unarchive" : "Archive"} disabled={busy} />
                 {parent && <ActionBtn onClick={() => doDetach(c.id)} icon={<Unlink className="h-3 w-3" />} label="Detach" disabled={busy} />}
-                <ActionBtn onClick={() => doDelete(c.id, !!parent)} icon={<Trash2 className="h-3 w-3" />} label="Delete" disabled={busy} danger />
+                <ActionBtn onClick={() => setDeleteTarget({ id: c.id, isChild: !!parent, name: c.name })} icon={<Trash2 className="h-3 w-3" />} label="Delete" disabled={busy} danger />
+                {c.last_scraped_at && (
+                  <span className="ml-1 text-[11px] text-ink-faint">Last refreshed {fmtRelative(c.last_scraped_at)}</span>
+                )}
               </div>
             </div>
 
             <div className="flex flex-wrap items-center justify-end gap-2">
-              <RefreshButton action={isPersona ? "persona" : "creator"} id={c.id} windowDays={refreshDays} onDone={load} />
-              <div className="inline-flex rounded-xl border border-jp-blue/20 bg-jp-navy-card/50 p-0.5">
+              <RefreshButton action={isPersona ? "persona" : "creator"} id={c.id} windowDays={refreshDays} onDone={load} size="sm" />
+              <div className="inline-flex rounded-xl border border-app-blue/20 bg-app-navy-card/50 p-0.5">
                 {([["recent", "Recent"], ["views", "Most views"]] as const).map(([k, label]) => (
                   <button
                     key={k}
                     type="button"
                     onClick={() => changeSort(k)}
-                    className={cn("rounded-lg px-3 py-1.5 text-xs font-medium transition-all", sort === k ? "bg-jp-blue text-white shadow-sm shadow-jp-blue/40" : "text-ink-muted hover:text-ink")}
+                    className={cn("rounded-lg px-3 py-1.5 text-xs font-medium transition-all", sort === k ? "bg-app-blue text-white shadow-sm shadow-app-blue/40" : "text-ink-muted hover:text-ink")}
                   >
                     {label}
                   </button>
@@ -442,7 +494,7 @@ export default function CreatorDetail({ slug }: { slug: string }) {
         <section className="mt-8">
           <div className="flex items-center justify-between">
             <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Accounts ({(accounts ?? []).length})</h2>
-            <button onClick={() => setAddChildOpen(true)} className="inline-flex items-center gap-1 rounded-lg border border-jp-blue/30 bg-jp-blue/10 px-2.5 py-1 text-xs font-medium text-jp-blue-light hover:bg-jp-blue/20">
+            <button onClick={() => setAddChildOpen(true)} className="inline-flex items-center gap-1 rounded-lg border border-app-blue/30 bg-app-blue/10 px-2.5 py-1 text-xs font-medium text-app-blue-light hover:bg-app-blue/20">
               <Plus className="h-3.5 w-3.5" /> Add account
             </button>
           </div>
@@ -455,11 +507,11 @@ export default function CreatorDetail({ slug }: { slug: string }) {
                   const isActive = account === a.id;
                   return (
                     <li key={a.id}>
-                      <div className={cn("rounded-xl border border-white/[0.06] bg-jp-navy-card/40 p-3", isActive && "ring-1 ring-jp-blue/40")}>
+                      <div className={cn("rounded-xl border border-white/[0.06] bg-app-navy-card/40 p-3", isActive && "ring-1 ring-app-blue/40")}>
                         <div className="flex items-center gap-3">
                           <CreatorAvatar name={a.name} src={a.profile_image_url} size="sm" />
                           <div className="min-w-0 flex-1">
-                            <Link href={`/creators/${a.slug}`} className="block truncate text-sm font-medium text-ink hover:underline">
+                            <Link href={`${creatorsBase}/${a.slug}`} className="block truncate text-sm font-medium text-ink hover:underline">
                               {a.name}
                               <ExternalLink className="ml-1 inline-block h-3 w-3 text-ink-faint" />
                             </Link>
@@ -470,7 +522,7 @@ export default function CreatorDetail({ slug }: { slug: string }) {
                               {a.youtube_handle && <PlatformPill platform="youtube" />}
                             </div>
                             <div className="mt-1 flex items-center gap-2 text-[10px]">
-                              <span className="num font-semibold text-jp-blue-light">{fmtCompact(a.total_views)}</span>
+                              <span className="num font-semibold text-app-blue-light">{fmtCompact(a.total_views)}</span>
                               <span className="text-ink-faint">{a.total_posts} {a.total_posts === 1 ? "post" : "posts"}</span>
                               {a.last_scraped_at && (
                                 <>
@@ -483,7 +535,7 @@ export default function CreatorDetail({ slug }: { slug: string }) {
                         </div>
                         <div className="mt-2 flex items-center justify-end gap-1.5 border-t border-white/[0.06] pt-2">
                           <ActionBtn onClick={() => doDetach(a.id)} icon={<Unlink className="h-3 w-3" />} label="Detach" disabled={busy} />
-                          <ActionBtn onClick={() => doDelete(a.id, true)} icon={<Trash2 className="h-3 w-3" />} label="Delete" disabled={busy} danger />
+                          <ActionBtn onClick={() => setDeleteTarget({ id: a.id, isChild: true, name: a.name })} icon={<Trash2 className="h-3 w-3" />} label="Delete" disabled={busy} danger />
                         </div>
                       </div>
                     </li>
@@ -508,7 +560,6 @@ export default function CreatorDetail({ slug }: { slug: string }) {
       {/* PERFORMANCE */}
       <section className="mt-8">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Performance</h2>
           <div className="flex items-center gap-3">
             {canSegment && (
               <button
@@ -516,51 +567,65 @@ export default function CreatorDetail({ slug }: { slug: string }) {
                 onClick={() => setSegment((s) => !s)}
                 className={cn(
                   "rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors",
-                  segmented ? "border-jp-blue/40 bg-jp-blue/15 text-jp-blue-light" : "border-white/[0.1] text-ink-muted hover:bg-white/[0.04] hover:text-ink",
+                  segmented ? "border-app-blue/40 bg-app-blue/15 text-app-blue-light" : "border-white/[0.1] text-ink-muted hover:bg-white/[0.04] hover:text-ink",
                 )}
               >
                 Segment by platform
               </button>
             )}
-            <span className="text-[11px] text-ink-faint">{tfLabel} · {granLabel.toLowerCase()} buckets</span>
           </div>
         </div>
-        <div className="mt-3 text-[10px] font-semibold uppercase tracking-wider text-ink-faint">For us — counted posts</div>
+        {/* Numbers on the left, attribution on the right. They answer the two
+            halves of the same question — how much reach, and what it brought —
+            so reading them side by side beats scrolling between them. */}
+        <div className="mt-3 grid gap-4 lg:grid-cols-2">
+        <div>
+        <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">Posts</div>
         <div className={cn("mt-2 grid gap-3", stats.community_posts > 0 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3")}>
-          <Stat label="Counted posts" value={stats.total_posts.toString()} />
-          <Stat label="Total views" value={fmtCompact(stats.total_views)} accent />
-          <Stat label="Avg / post" value={stats.total_posts > 0 ? fmtCompact(stats.avg_views_per_post) : "—"} />
+          <Stat label="Approved posts" value={stats.total_posts.toString()} />
+          <Stat label="Approved views" value={fmtCompact(stats.total_views)} accent />
+          <Stat label="Avg / post" value={stats.total_posts > 0 ? fmtCompact(stats.avg_views_per_post) : "-"} />
           {stats.community_posts > 0 && <Stat label="Counted CP" value={stats.community_posts.toString()} accent />}
         </div>
 
         {/* GCP: the same creator's every-post baseline + the us-vs-general ratio */}
         {general && general.posts > 0 && (
           <>
-            <div className="mt-4 flex flex-wrap items-baseline justify-between gap-2">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">General — every post (GCP)</span>
-              {general.avg > 0 && stats.total_posts > 0 && (
-                <span className="text-[11px] text-ink-muted">
-                  For-us avg is{" "}
-                  <span className={cn("num font-semibold", stats.avg_views_per_post >= general.avg ? "text-emerald-300" : "text-amber-300")}>
-                    {Math.round((stats.avg_views_per_post / general.avg) * 100)}%
-                  </span>{" "}
-                  of their general avg
-                </span>
-              )}
-            </div>
-            <div className="mt-2 grid grid-cols-3 gap-3">
+            <div className="mt-3 grid grid-cols-3 gap-3">
               <Stat label="All posts" value={general.posts.toString()} />
               <Stat label="All views" value={fmtCompact(general.views)} accent />
-              <Stat label="Avg / post (all)" value={fmtCompact(general.avg)} />
+              {/* The us-vs-general ratio rides Avg / post as an "i" rather than
+                  a sentence over the row. It is a footnote about this number,
+                  so it belongs on this number. */}
+              <Stat
+                label="Avg / post (all)"
+                value={fmtCompact(general.avg)}
+                hint={
+                  general.avg > 0 && stats.total_posts > 0
+                    ? `Their approved posts average ${Math.round((stats.avg_views_per_post / general.avg) * 100)}% of this.`
+                    : undefined
+                }
+              />
             </div>
           </>
         )}
+
+        </div>
+
+        {/* Attribution — the other half of the same question. */}
+        <div>
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">Attribution</div>
+          <div className="mt-2">
+            <CreatorAttributionCard attribution={heardAttributionFor(attributionData, c.id)} loading={attributionLoading} />
+          </div>
+        </div>
+        </div>
 
         {/* Total views broken out per platform when segmenting. */}
         {segmented && (
           <div className={cn("mt-3 grid gap-3", presentPlatforms.length >= 3 ? "grid-cols-3" : "grid-cols-2")}>
             {presentPlatforms.map((p) => (
-              <div key={p.key} className="rounded-xl border border-white/[0.06] bg-jp-navy-card/40 px-4 py-3">
+              <div key={p.key} className="rounded-xl border border-white/[0.06] bg-app-navy-card/40 px-4 py-3">
                 <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
                   <span className="h-2 w-2 rounded-full" style={{ backgroundColor: p.color }} />
                   {p.label}
@@ -573,7 +638,7 @@ export default function CreatorDetail({ slug }: { slug: string }) {
         )}
 
         {buckets.length > 0 && (
-          <div className="mt-4 rounded-xl border border-white/[0.06] bg-jp-navy-card/40 p-5">
+          <div className="mt-4 rounded-xl border border-white/[0.06] bg-app-navy-card/40 p-5">
             <div className="flex items-baseline justify-between">
               <h3 className="text-sm font-medium text-ink">{granLabel} views by post date</h3>
               <span className="text-[11px] uppercase tracking-wider text-ink-faint">
@@ -592,7 +657,7 @@ export default function CreatorDetail({ slug }: { slug: string }) {
                   <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
                   <XAxis dataKey="date" tick={{ fill: CHART.tick, fontSize: 11 }} tickLine={false} axisLine={false} minTickGap={24} />
                   <YAxis tick={{ fill: CHART.tick, fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={fmtCompact} width={56} />
-                  <Tooltip {...TOOLTIP_STYLE} formatter={(v, name) => [typeof v === "number" ? fmtCompact(v) : "–", String(name ?? "Views")]} />
+                  <Tooltip {...TOOLTIP_STYLE} formatter={(v: number, name: string) => [fmtCompact(v), name]} />
                   {segmented ? (
                     <>
                       <Legend wrapperStyle={{ fontSize: 11, paddingTop: 6 }} iconType="plainline" />
@@ -610,6 +675,24 @@ export default function CreatorDetail({ slug }: { slug: string }) {
         )}
       </section>
 
+      {/* Demographics of the people who named them. */}
+      {(() => {
+        const attr = heardAttributionFor(attributionData, c.id);
+        if (!attr || attr.downloads === 0) return null;
+        return (
+          <section className="mt-8">
+            <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Who they bring in</h2>
+            <div className="mt-3 rounded-xl border border-white/[0.06] bg-app-navy-card/40 p-5">
+              <CreatorDemographics
+                demo={attr.demographics}
+                downloads={attr.downloads}
+                missingPlatform={missingAnswerPlatform(attributionData)}
+              />
+            </div>
+          </section>
+        );
+      })()}
+
       {/* Audience by country (TikTok demographics) — leaf creators with a TT handle */}
       {!isPersona && c.tiktok_handle && (
         <section className="mt-8">
@@ -619,11 +702,11 @@ export default function CreatorDetail({ slug }: { slug: string }) {
               {audienceAt ? `Last pulled ${fmtRelative(audienceAt)}` : "TikTok-only · ~26 credits per pull"}
             </span>
           </div>
-          <div className="mt-3 rounded-xl border border-white/[0.06] bg-jp-navy-card/40 p-5">
+          <div className="mt-3 rounded-xl border border-white/[0.06] bg-app-navy-card/40 p-5">
             {audience ? (
               <AudienceCountriesChart raw={audience} />
             ) : (
-              <p className="text-sm text-ink-faint">No audience data yet — hit <span className="text-jp-blue-light">Audience</span> above to pull it from ScrapeCreators (~26 credits).</p>
+              <p className="text-sm text-ink-faint">No audience data yet, hit <span className="text-app-blue-light">Audience</span> above to pull it from ScrapeCreators (~26 credits).</p>
             )}
           </div>
         </section>
@@ -647,6 +730,7 @@ export default function CreatorDetail({ slug }: { slug: string }) {
         onClose={() => setEditOpen(false)}
         kind="creator"
         initial={{ id: c.id, name: c.name, type: c.type, instagram_handle: c.instagram_handle, tiktok_handle: c.tiktok_handle, youtube_handle: c.youtube_handle, parent_id: c.parent_id }}
+        personas={personas}
         onSaved={() => load()}
       />
       {/* Add a child account to this persona */}
@@ -659,6 +743,36 @@ export default function CreatorDetail({ slug }: { slug: string }) {
           onSaved={(r) => { if (r.id) triggerAutoPull(r.id); setTimeout(load, 600); }}
         />
       )}
+
+      <Modal
+        open={deleteTarget !== null}
+        title={deleteTarget?.isChild ? "Delete this account?" : "Delete this creator?"}
+        onClose={() => setDeleteTarget(null)}
+        footer={
+          <>
+            <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button
+              variant="danger"
+              size="sm"
+              disabled={busy}
+              onClick={() => deleteTarget && doDelete(deleteTarget.id, deleteTarget.isChild)}
+            >
+              Delete
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-2 text-sm text-ink-muted">
+          <p>
+            <strong className="text-ink">{deleteTarget?.name}</strong> and every post recorded
+            against them will be removed.
+          </p>
+          <p>
+            Their view history goes with them, so anything already paid on those numbers
+            becomes unverifiable. This cannot be undone.
+          </p>
+        </div>
+      </Modal>
     </div>
   );
 }

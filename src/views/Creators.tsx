@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { TableSkeleton } from "@/components/ui/Skeleton";
 import Link from "next/link";
 import { toast } from "react-toastify";
 import { Loader2, Search, ArrowUp, ArrowDown, ChevronsUpDown, Users2, ChevronRight, Check, Archive, ArchiveRestore, Trash2 } from "lucide-react";
@@ -21,6 +22,9 @@ import { PlatformPill } from "@/components/creators/PlatformBadge";
 import { RefreshButton } from "@/components/creators/RefreshButton";
 import CreatorFormModal, { triggerAutoPull } from "@/components/creators/CreatorFormModal";
 import { Plus } from "lucide-react";
+import { useAttribution } from "@/components/creators/attribution";
+import type { CreatorAttribution } from "@/lib/attributionJob";
+import { creatorApi, useCreatorSection } from "@/lib/creatorMarketClient";
 
 type SortKey = "name" | "posts" | "views" | "avg";
 type SortDir = "asc" | "desc";
@@ -58,7 +62,7 @@ function flag(code: string | null): string {
 const TYPE_LABEL: Record<string, string> = { influencer: "Influencer", daily_ugc: "Daily UGC", youtuber: "YouTuber", persona: "Persona", ambassador: "Ambassador", other: "Other" };
 
 const inputCls =
-  "rounded-lg border border-white/[0.08] bg-jp-navy-card/50 px-2.5 py-1.5 text-xs text-ink placeholder:text-ink-faint focus:border-jp-blue/45 focus:outline-none";
+  "rounded-lg border border-white/[0.08] bg-app-navy-card/50 px-2.5 py-1.5 text-xs text-ink placeholder:text-ink-faint focus:border-app-blue/45 focus:outline-none";
 
 /** Square checkbox matching the DataTable / Columns-picker style. */
 function CheckBox({ state, onClick, label }: { state: "on" | "off"; onClick: (e: React.MouseEvent) => void; label: string }) {
@@ -71,7 +75,7 @@ function CheckBox({ state, onClick, label }: { state: "on" | "off"; onClick: (e:
       onClick={onClick}
       className={cn(
         "flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors",
-        state === "on" ? "border-jp-blue bg-jp-blue text-white" : "border-white/25 hover:border-white/45"
+        state === "on" ? "border-app-blue bg-app-blue text-white" : "border-white/25 hover:border-white/45"
       )}
     >
       {state === "on" && <Check className="h-3 w-3" />}
@@ -80,6 +84,7 @@ function CheckBox({ state, onClick, label }: { state: "on" | "off"; onClick: (e:
 }
 
 export default function Creators() {
+  const { base: creatorsBase } = useCreatorSection();
   const [data, setData] = useState<CreatorWithStats[]>([]);
   const [counts, setCounts] = useState<{ active: number; archived: number; total: number } | null>(null);
   const [scCredits, setScCredits] = useState<number | null>(null);
@@ -132,7 +137,7 @@ export default function Creators() {
       const { fromISO, toISO } = resolveTimeframe(tf);
       const p = new URLSearchParams({ status, type, from: fromISO, to: toISO });
       if (debounced) p.set("search", debounced);
-      const res = await fetch(`/api/creators?${p}`, { headers: authHeaders() });
+      const res = await fetch(creatorApi(`/api/creators?${p}`), { headers: authHeaders() });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         throw new Error(d.error || `Failed (${res.status})`);
@@ -160,6 +165,14 @@ export default function Creators() {
       return (a.avg_views_per_post - b.avg_views_per_post) * mult;
     });
   }, [data, sort, dir]);
+
+  // Attribution comes from the cron-computed payload, so the roster does not
+  // wait on it: the three columns fill in when it lands and read "-" until then.
+  const { data: attributionData } = useAttribution();
+  const attrById = useMemo(
+    () => new Map((attributionData?.creators ?? []).map((a) => [a.creatorId, a])),
+    [attributionData]
+  );
 
   const mainList = sorted.filter((c) => c.type !== "youtuber");
   const youtubers = sorted.filter((c) => c.type === "youtuber");
@@ -208,7 +221,7 @@ export default function Creators() {
       const results = await Promise.all(
         batch.map(async (id) => {
           try {
-            const r = await fetch("/api/creators/manage", {
+            const r = await fetch(creatorApi("/api/creators/manage"), {
               method: "POST",
               headers: { "Content-Type": "application/json", ...authHeaders() },
               // `force` matches the single-creator Delete on a creator's own
@@ -235,7 +248,7 @@ export default function Creators() {
       toast.update(tid, { render: `${verb} ${ok}`, type: "success", isLoading: false, autoClose: 3000 });
     } else {
       toast.update(tid, {
-        render: `${verb} ${ok}, ${failures.length} failed — ${failures.slice(0, 3).join("; ")}${failures.length > 3 ? "…" : ""}`,
+        render: `${verb} ${ok}, ${failures.length} failed, ${failures.slice(0, 3).join("; ")}${failures.length > 3 ? "…" : ""}`,
         type: ok > 0 ? "warning" : "error",
         isLoading: false,
         autoClose: 8000,
@@ -259,22 +272,23 @@ export default function Creators() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Creators"
+        title={creatorsBase === "/alt-creators" ? "Second-market creators" : "Creators"}
         subtitle={
           counts
             ? `${counts.active} active${counts.archived ? ` · ${counts.archived} archived` : ""} · stats over ${resolveTimeframe(tf).label.toLowerCase()}`
             : undefined
         }
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href={`${creatorsBase}/attribution`} className="inline-flex h-[2.125rem] items-center rounded-xl border border-white/[0.12] bg-app-navy-card/60 px-3.5 text-[0.8125rem] font-medium text-ink">Attribution</Link>
             {scCredits != null && (
-              <span className="rounded-lg border border-white/[0.08] bg-jp-navy-card/50 px-2.5 py-1.5 text-xs text-ink-muted" title="ScrapeCreators credits remaining">
+              <span className="inline-flex h-[2.125rem] items-center rounded-xl border border-white/[0.08] bg-app-navy-card/50 px-3.5 text-[0.8125rem] text-ink-muted" title="ScrapeCreators credits remaining">
                 {scCredits >= 1000 ? `${(scCredits / 1000).toFixed(1)}K` : scCredits} credits
               </span>
             )}
-            <button onClick={() => setAddOpen(true)} className="inline-flex items-center gap-1.5 rounded-xl bg-jp-blue px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-jp-blue-light">
+            <Button size="sm" onClick={() => setAddOpen(true)}>
               <Plus className="h-4 w-4" /> Add creator
-            </button>
+            </Button>
             <RefreshButton action="all" windowDays={30} label="Refresh all" onDone={load} />
             <TimeframeFilter value={tf} onChange={setTf} />
           </div>
@@ -290,7 +304,7 @@ export default function Creators() {
       />
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="app-toolbar flex flex-wrap items-center gap-2">
         <div className="relative">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-faint" />
           <input className={inputCls + " w-56 pl-8"} placeholder="Search creators…" value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -309,7 +323,7 @@ export default function Creators() {
         </select>
       </div>
 
-      {error && <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-300">{error}</div>}
+      {error && <div className="rounded-lg border border-app-red/30 bg-app-red/10 px-4 py-2.5 text-sm text-app-red-text">{error}</div>}
 
       <BatchBar count={selected.size} onClear={() => setSelected(new Set())}>
         <Button size="sm" variant="secondary" onClick={() => runBulk("archive")} disabled={busy}>
@@ -324,7 +338,7 @@ export default function Creators() {
       </BatchBar>
 
       {loading && data.length === 0 ? (
-        <div className="flex items-center justify-center py-20 text-ink-muted"><Loader2 className="mr-2 h-6 w-6 animate-spin" /> Loading creators…</div>
+        <TableSkeleton rows={10} cols={7} />
       ) : data.length === 0 ? (
         <Empty title={debounced ? "No creators match" : "No creators"} description="Adjust the filters or timeframe." />
       ) : (
@@ -335,6 +349,12 @@ export default function Creators() {
               <CheckBox state={allSelected ? "on" : "off"} onClick={toggleAll} label={allSelected ? "Deselect all" : "Select all"} />
               <SortLabel k="name" className="justify-start">Creator</SortLabel>
             </div>
+            {/* Attribution first, then reach. What a creator brought in is the
+                question you come to this list with; posts and views are how
+                they did it. They also fill the empty middle of the row. */}
+            <span className="min-w-[68px] text-right">Installs</span>
+            <span className="min-w-[68px] text-right">Revenue</span>
+            <span className="min-w-[56px] text-right">Avg age</span>
             <span className="min-w-[84px] text-right">Last post</span>
             <SortLabel k="posts" className="min-w-[60px] justify-end">Posts</SortLabel>
             <SortLabel k="views" className="min-w-[64px] justify-end">Views</SortLabel>
@@ -343,7 +363,7 @@ export default function Creators() {
 
           <ul className="space-y-2.5">
             {mainList.map((c) => (
-              <CreatorRow key={c.id} c={c} selected={selected.has(c.id)} onToggle={() => toggle(c.id)} />
+              <CreatorRow key={c.id} c={c} selected={selected.has(c.id)} onToggle={() => toggle(c.id)} attr={attrById.get(c.id)} />
             ))}
           </ul>
 
@@ -352,11 +372,11 @@ export default function Creators() {
               <div className="mb-3 flex items-baseline gap-3 px-1">
                 <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">YouTubers</h2>
                 <span className="text-[10px] text-ink-faint/60">{youtubers.length} creator{youtubers.length === 1 ? "" : "s"}</span>
-                <div className="ml-1 h-px flex-1 bg-gradient-to-r from-jp-blue/15 via-white/[0.04] to-transparent" />
+                <div className="ml-1 h-px flex-1 bg-gradient-to-r from-app-blue/15 via-white/[0.04] to-transparent" />
               </div>
               <ul className="space-y-2.5">
                 {youtubers.map((c) => (
-                  <CreatorRow key={c.id} c={c} selected={selected.has(c.id)} onToggle={() => toggle(c.id)} />
+                  <CreatorRow key={c.id} c={c} selected={selected.has(c.id)} onToggle={() => toggle(c.id)} attr={attrById.get(c.id)} />
                 ))}
               </ul>
             </div>
@@ -381,7 +401,7 @@ export default function Creators() {
           This permanently deletes {selected.size === 1 ? "this creator" : "these creators"} <span className="font-medium text-ink">and every post scraped for them</span>. It
           cannot be undone. To take them off the roster while keeping the history, use Archive instead.
         </p>
-        <ul className="mt-3 max-h-40 space-y-1 overflow-y-auto rounded-lg border border-white/[0.06] bg-jp-navy/40 p-3 text-xs">
+        <ul className="mt-3 max-h-40 space-y-1 overflow-y-auto rounded-lg border border-white/[0.06] bg-app-navy/40 p-3 text-xs">
           {selectedCreators.map((c) => (
             <li key={c.id} className="flex items-center justify-between gap-3">
               <span className="truncate text-ink">{c.name}</span>
@@ -394,7 +414,8 @@ export default function Creators() {
   );
 }
 
-function CreatorRow({ c, selected, onToggle }: { c: CreatorWithStats; selected: boolean; onToggle: () => void }) {
+function CreatorRow({ c, selected, onToggle, attr }: { c: CreatorWithStats; selected: boolean; onToggle: () => void; attr?: CreatorAttribution | null }) {
+  const { base: creatorsBase } = useCreatorSection();
   const platforms = (["instagram", "tiktok", "youtube"] as Platform[]).filter((p) => c[`${p}_handle` as const]);
   const isArchived = c.status === "archived";
   const isPersona = c.type === "persona";
@@ -402,8 +423,8 @@ function CreatorRow({ c, selected, onToggle }: { c: CreatorWithStats; selected: 
   return (
     <li
       className={cn(
-        "flex items-center overflow-hidden rounded-xl border bg-jp-navy-card/40 transition-colors",
-        selected ? "border-jp-blue/45 bg-jp-blue/[0.06]" : "border-white/[0.06] hover:border-jp-blue/25 hover:bg-white/[0.02]"
+        "flex items-center overflow-hidden rounded-xl border bg-app-navy-card/40 transition-colors",
+        selected ? "border-app-blue/45 bg-app-blue/[0.06]" : "border-white/[0.06] hover:border-app-blue/25 hover:bg-white/[0.02]"
       )}
     >
       {/* Outside the Link, so selecting never navigates. */}
@@ -411,16 +432,16 @@ function CreatorRow({ c, selected, onToggle }: { c: CreatorWithStats; selected: 
         <CheckBox state={selected ? "on" : "off"} onClick={onToggle} label={`Select ${c.name}`} />
       </div>
 
-      <Link href={`/creators/${slugForCreator(c)}`} className="flex min-w-0 flex-1 items-center gap-4 px-4 py-3.5">
+      <Link href={`${creatorsBase}/${slugForCreator(c)}`} className="flex min-w-0 flex-1 items-center gap-4 px-4 py-3.5">
         {isPersona ? <PersonaAvatar name={c.name} accounts={c.accounts ?? []} size="md" /> : <CreatorAvatar name={c.name} src={c.profile_image_url} size="md" />}
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-medium text-ink">{c.name}</span>
-            <span className={cn("rounded-md px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide", isPersona ? "bg-jp-purple/15 text-jp-purple" : "bg-white/[0.06] text-ink-muted")}>
+            <span className={cn("rounded-md px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide", isPersona ? "bg-app-purple/15 text-app-purple" : "bg-white/[0.06] text-ink-muted")}>
               {isPersona && <Users2 className="mr-0.5 inline h-2.5 w-2.5" />}{TYPE_LABEL[c.type] || c.type}
             </span>
             {c.region && <span className="text-xs">{flag(c.region)}</span>}
-            {isArchived && <span className="rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-300">Archived</span>}
+            {isArchived && <span className="rounded-md bg-app-orange/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-app-orange">Archived</span>}
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-ink-faint">
             {platforms.map((p) => <PlatformPill key={p} platform={p} />)}
@@ -429,10 +450,17 @@ function CreatorRow({ c, selected, onToggle }: { c: CreatorWithStats; selected: 
           </div>
         </div>
         <div className="hidden items-center gap-7 text-right md:flex">
+          <Cell width={68} value={attr && attr.downloads > 0 ? attr.downloads.toLocaleString() : "-"} />
+          <Cell
+            width={68}
+            value={attr && attr.revenue > 0 ? (attr.revenue < 100 ? `$${attr.revenue.toFixed(0)}` : `$${Math.round(attr.revenue).toLocaleString()}`) : "-"}
+            money={!!attr && attr.revenue > 0}
+          />
+          <Cell width={56} value={attr?.demographics.avgAge != null ? String(attr.demographics.avgAge) : "-"} />
           <LastPostCell iso={c.last_posted_at} />
           <Cell value={c.total_posts.toString()} />
           <Cell value={fmtCompact(c.total_views)} accent />
-          <Cell value={c.total_posts > 0 ? fmtCompact(c.avg_views_per_post) : "—"} />
+          <Cell value={c.total_posts > 0 ? fmtCompact(c.avg_views_per_post) : "-"} />
         </div>
         <ChevronRight className="h-4 w-4 shrink-0 text-ink-faint/50" />
       </Link>
@@ -440,18 +468,25 @@ function CreatorRow({ c, selected, onToggle }: { c: CreatorWithStats; selected: 
   );
 }
 
-function Cell({ value, accent }: { value: string; accent?: boolean }) {
-  return <div className={cn("min-w-[60px] text-sm font-semibold num", accent ? "text-jp-blue-light" : "text-ink")}>{value}</div>;
+function Cell({ value, accent, money, width = 60 }: { value: string; accent?: boolean; money?: boolean; width?: number }) {
+  return (
+    <div
+      className={cn("text-sm font-semibold num", accent ? "text-app-blue-light" : money ? "text-app-green" : "text-ink")}
+      style={{ minWidth: width }}
+    >
+      {value}
+    </div>
+  );
 }
 
 /** "Last post" cell — relative time of the creator's most recent counted post.
  * Amber once it's been ≥14 days (a nudge that they've gone quiet); "—" if none
  * in the selected window. Hover shows the exact date/time. */
 function LastPostCell({ iso }: { iso: string | null }) {
-  if (!iso) return <div className="min-w-[84px] text-sm text-ink-faint">—</div>;
+  if (!iso) return <div className="min-w-[84px] text-sm text-ink-faint">-</div>;
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400_000);
   return (
-    <div className={cn("min-w-[84px] text-sm font-medium", days >= 14 ? "text-amber-300/90" : "text-ink-muted")} title={new Date(iso).toLocaleString()}>
+    <div className={cn("min-w-[84px] text-sm font-medium", days >= 14 ? "text-app-orange/90" : "text-ink-muted")} title={new Date(iso).toLocaleString()}>
       {fmtAgo(iso)}
     </div>
   );

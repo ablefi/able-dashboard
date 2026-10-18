@@ -16,6 +16,16 @@
 
 export type Platform = "ios" | "android" | "web";
 
+/**
+ * Which platform's country rules to evaluate a user's access under. The
+ * backend falls back to Android when it is not told; we never rely on that.
+ * Android only for someone whose sessions are Android-only; iOS otherwise
+ * (including unknown), since that is where the users are.
+ */
+export function accessPlatformFor(platforms?: string[] | null): "ios" | "android" {
+  return platforms?.includes("android") && !platforms.includes("ios") ? "android" : "ios";
+}
+
 /** Static options — the doc is explicit that there's no endpoint for these. */
 export const PLATFORM_OPTIONS: { value: Platform; label: string }[] = [
   { value: "ios", label: "iOS" },

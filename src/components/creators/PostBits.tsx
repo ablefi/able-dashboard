@@ -3,13 +3,16 @@
 import { useEffect, useRef, useState } from "react";
 
 /**
- * Shared post-card bits ported from jp-creators: thumbUrl (IG thumbnails
+ * Shared post-card bits ported from roster: thumbUrl (IG thumbnails
  * route through our proxy — IG CDN URLs are blocker-hostile and expire),
  * ExpandableCaption (tap to expand/collapse), and the gradient Sparkline.
  */
 
 export function thumbUrl(post: { id: string; platform: string; thumbnail_url: string | null }): string | null {
   if (!post.thumbnail_url) return null;
+  // Already our own copy in Supabase Storage: load it straight, the proxy would
+  // only add a round trip through our server to fetch a public file.
+  if (post.thumbnail_url.includes("/storage/v1/object/public/")) return post.thumbnail_url;
   if (post.platform === "instagram") return `/api/creators/thumb/${post.id}`;
   return post.thumbnail_url;
 }
@@ -67,7 +70,7 @@ export function ExpandableCaption({
     <div
       ref={ref}
       onClick={interactive ? (e) => { e.preventDefault(); e.stopPropagation(); setExpanded((v) => !v); } : undefined}
-      className={`${className} ${clampClass} ${interactive ? "cursor-pointer transition-colors hover:text-jp-blue-light" : ""}`}
+      className={`${className} ${clampClass} ${interactive ? "cursor-pointer transition-colors hover:text-app-blue-light" : ""}`}
       title={interactive ? (expanded ? "Tap to collapse" : "Tap to expand") : undefined}
     >
       {value}
@@ -77,7 +80,7 @@ export function ExpandableCaption({
 
 export function Sparkline({ values, width = 80, height = 24, className = "" }: { values: number[]; width?: number; height?: number; className?: string }) {
   const [id] = useState(() => `spark-${Math.random().toString(36).slice(2, 9)}`);
-  if (values.length < 2) return <div className={`text-xs text-ink-faint ${className}`}>—</div>;
+  if (values.length < 2) return <div className={`text-xs text-ink-faint ${className}`}>-</div>;
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = max - min || 1;

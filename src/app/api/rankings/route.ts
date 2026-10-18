@@ -3,7 +3,7 @@ import { requireSession } from "@/lib/auth";
 import { fetchCompetitorRows, appState, appStateSet } from "@/lib/supabaseRest";
 
 /**
- * App Store category rankings for Just Pray + all competitors across ~50
+ * App Store category rankings for our own app (APPLE_APP_ID, when set) + all competitors across ~50
  * storefronts (iTunes RSS top-free feeds).
  *
  * THE FIX vs localhost: results are now PERSISTED (app_state key
@@ -69,9 +69,12 @@ const COUNTRIES = [
   { code: "kz", name: "Kazakhstan", flag: "🇰🇿" },
   { code: "az", name: "Azerbaijan", flag: "🇦🇿" },
 ];
-const DEFAULT_GENRE_ID = 6006; // Reference
+const DEFAULT_GENRE_ID = 6015; // Finance
 const LIMIT = 200;
-const JUST_PRAY_ID = "6747154163";
+// Our own App Store id. Blank until the app is live on the store; the table
+// then lists competitors only.
+const OWN_APP_ID = process.env.APPLE_APP_ID || "";
+const OWN_APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || "Able";
 
 async function fetchGenreFeed(countryCode: string, genreId: number): Promise<{ id: string; name: string; rank: number }[]> {
   try {
@@ -109,14 +112,14 @@ export async function POST(req: NextRequest) {
   try {
     const competitors = await fetchCompetitorRows();
     const appIds = competitors.filter((c) => c.app_store_id).map((c) => String(c.app_store_id));
-    const appNames: Record<string, string> = { [JUST_PRAY_ID]: "Just Pray" };
+    const appNames: Record<string, string> = OWN_APP_ID ? { [OWN_APP_ID]: OWN_APP_NAME } : {};
     const genreOverrides: Record<string, number> = {};
     for (const c of competitors) {
       if (!c.app_store_id) continue;
       appNames[c.app_store_id] = c.name;
       if (c.genre_id && c.genre_id !== DEFAULT_GENRE_ID) genreOverrides[c.app_store_id] = c.genre_id;
     }
-    const allIds = Array.from(new Set([JUST_PRAY_ID, ...appIds]));
+    const allIds = Array.from(new Set([...(OWN_APP_ID ? [OWN_APP_ID] : []), ...appIds]));
 
     const rankingsMap: Record<string, any> = {};
     for (const id of allIds) {
@@ -156,6 +159,7 @@ export async function POST(req: NextRequest) {
     }
 
     const payload = {
+      ownAppId: OWN_APP_ID || null,
       rankings: Object.values(rankingsMap),
       countries: COUNTRIES,
       primaryCount: PRIMARY_COUNT,

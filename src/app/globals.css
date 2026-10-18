@@ -12,28 +12,76 @@
 @import "tailwindcss/utilities.css" layer(utilities);
 
 /*
- * Able Ops light palette. The existing JP-named utility tokens are retained
- * so the shared dashboard components can be restyled without rewriting pages.
+ * Brand palette, shared so all
+ * three internal tools feel like one family. Keep in sync if it evolves.
  */
-@theme inline {
-  --color-jp-blue: #111111;
-  --color-jp-blue-dark: #000000;
-  --color-jp-blue-light: #333333;
-  --color-jp-navy: #ffffff;
-  --color-jp-navy-light: #f8f8f6;
-  --color-jp-navy-card: #ffffff;
-  --color-jp-cyan: #0e7490;
-  --color-jp-teal: #0f766e;
-  --color-jp-gold: #a16207;
-  --color-jp-purple: #7c3aed;
+/* NOT `@theme inline`: inline substitutes each value straight into the
+   utilities and never emits the custom property, which makes the palette
+   impossible to change at runtime. Plain @theme puts these on :root and has
+   utilities reference them, so the theme picker can override them live. */
+@theme {
+  --color-app-blue: #3341ff;
+  --color-app-blue-dark: #0a16c2;
+  --color-app-blue-light: #616bff;
+  /* Picked on the live dashboard with the theme picker, not guessed at here:
+     surface 236, colourfulness 60%, lightness 18%, accent 236 at full punch.
 
-  --color-ink: #161616;
-  --color-ink-muted: #72716d;
-  --color-ink-faint: #85847e;
-  --color-able-orange: #ff5d2b;
+     The four surfaces are one ramp: same hue, fixed lightness steps apart.
+     Move them together in the picker and paste the result back rather than
+     nudging one by hand. */
+  --color-app-navy: #121649;
+  --color-app-navy-light: #161a58;
+  --color-app-navy-card: #1d2267;
+  /* One step above a card, for menus and anything that floats. */
+  --color-app-navy-raised: #242a7a;
+  /* Headline numbers. A pale, low-saturation tint of the accent rather than
+     plain white — white is the browser default and reads as unstyled; this
+     belongs to the palette while staying neutral enough that the green/red
+     on money still means something. */
+  --color-stat: #cbcdf1;
+  /* Categorical ramp for charts: ONE hue stepping down in lightness.
+     Six unrelated hues is what made these read as a legend. Lightness is
+     also the channel colour blindness leaves intact, so a monotonic ramp
+     separates better than hue ever did. Ordered light to dark. */
+  --color-cat-1: #afb2de;
+  --color-cat-2: #8b90da;
+  --color-cat-3: #626ada;
+  --color-cat-4: #3541de;
+  --color-cat-5: #1724d3;
+  --color-cat-6: #0e19b4;
+  /* Lifted verbatim from the iOS asset catalog (Assets.xcassets/ColorPalette)
+     so the dashboard's semantics are the app's semantics, not Tailwind's
+     defaults. The app's "good" is a teal-green, not emerald, and its red is
+     far more saturated than rose. */
+  --color-app-green: #00b6a0;   /* ConfirmButton / CustomGreen */
+  --color-app-red: #dc0307;     /* DestructiveButton / CustomRed. A FILL colour:
+                                  white sits on top of it in the app. At 3.4:1
+                                  it fails as text on a dark ground, so badges
+                                  and labels use the -text variants below. */
+  --color-app-red-text: #ff6b6e;    /* 6.3:1 */
+  --color-app-orange: #f2771f;  /* WarningButton / CustomOrange */
+  --color-app-violet: #962db5;  /* ExcusedButton / CustomPurple, also a fill. */
+  --color-app-violet-text: #d18ce8; /* 7.2:1, the readable text form */
+  --color-app-accent: #0597ff;   /* the brand blue, the brand accent */
+  --color-app-accent-bright: #3fd8fa; /* customBlue2, the glow end of the ring */
+  --color-app-stroke: #28456c;  /* LiquidGlassClearBackgroundStroke */
 
-  --color-rule: rgba(23, 35, 30, 0.10);
-  --color-rule-strong: rgba(23, 35, 30, 0.18);
+  --color-app-cyan: #4fb8e8;
+  --color-app-teal: #2dd4bf;
+  --color-app-gold: #f59e0b;
+  --color-app-purple: #a855f7;
+
+  /* Was #f2f6fa, which is 20:1 against the brand ground. AA needs 4.5 and
+     most dark interfaces sit at 12-15; pure white on near-black is the classic
+     harsh pairing. 14.5:1 against the page stays crisp without the glare. */
+  --color-ink: #d2dcea;
+  /* Both lifted with the surfaces — at the old values, secondary text on the
+     lighter navy sat under a comfortable contrast ratio. */
+  --color-ink-muted: #a9b8cc;
+  --color-ink-faint: #7e8ea6;
+
+  --color-rule: rgba(96, 165, 250, 0.12);
+  --color-rule-strong: rgba(96, 165, 250, 0.22);
 
   --font-sans: var(--font-inter);
 }
@@ -46,67 +94,102 @@
  * own buttons — which is exactly what made buttons render as plain text.
  */
 @layer base {
-  .jp-shell, .jp-shell * { box-sizing: border-box; }
-  .jp-shell button { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; }
+  .app-shell, .app-shell * { box-sizing: border-box; }
+  .app-shell button { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; }
   /* Every button in the shell gets a press response, not just the ones using
      the Button component — several screens still hand-roll their own. */
-  .jp-shell button { transition: transform 120ms ease, background-color 150ms ease, color 150ms ease, border-color 150ms ease, opacity 150ms ease; }
-  .jp-shell button:active:not(:disabled) { transform: scale(0.97); }
+  .app-shell button { transition: transform 120ms ease, background-color 150ms ease, color 150ms ease, border-color 150ms ease, opacity 150ms ease; }
+  .app-shell button:active:not(:disabled) { transform: scale(0.97); }
   @media (prefers-reduced-motion: reduce) {
-    .jp-shell button { transition: none; }
-    .jp-shell button:active:not(:disabled) { transform: none; }
+    .app-shell button { transition: none; }
+    .app-shell button:active:not(:disabled) { transform: none; }
   }
-  .jp-shell a { color: inherit; text-decoration: none; }
+  .app-shell a { color: inherit; text-decoration: none; }
+  /* Preflight is off, so a bare <input> keeps the User-Agent's inset border
+     and its own background — which is why an input that only sets
+     `bg-transparent` renders with a grey box around it. Every other field in
+     the app happens to hide this by declaring its own border. Reset it here so
+     that is not a thing each new field has to remember. Base loses to
+     utilities, so anything setting its own border still wins. */
+  .app-shell input:not([type="checkbox"]):not([type="radio"]), .app-shell textarea, .app-shell select {
+    appearance: none;
+    background: none;
+    border: 0;
+    margin: 0;
+    font: inherit;
+    color: inherit;
+  }
+  .app-shell input:not([type="checkbox"]):not([type="radio"]):focus, .app-shell textarea:focus, .app-shell select:focus { outline: none; }
+  .app-shell input[type="checkbox"], .app-shell input[type="radio"] { appearance: auto; accent-color: var(--color-app-blue); color-scheme: dark; }
   /* No preflight → strip default list markers/margins inside our shell. */
-  .jp-shell ul, .jp-shell ol { list-style: none; margin: 0; padding: 0; }
-  .jp-shell h1, .jp-shell h2, .jp-shell h3, .jp-shell h4, .jp-shell p { margin: 0; }
+  .app-shell ul, .app-shell ol { list-style: none; margin: 0; padding: 0; }
+  .app-shell h1, .app-shell h2, .app-shell h3, .app-shell h4, .app-shell p { margin: 0; }
 }
 
 /*
- * Global ~90% scale. Adam wanted the whole admin to feel like it's at 90%
- * zoom (more breathing room, less "zoomed in"). Tailwind sizing is rem-based,
- * so shrinking the root font size scales text + spacing together. 16px → 14.4px.
+ * Global scale. Started at 90% to get more on screen; dialled back up because
+ * that's what was making everything read as cramped and small. Tailwind sizing
+ * is rem-based, so this scales text and spacing together. 16px → 13.9px.
+ * One number to turn if it wants to go further either way.
  */
-html { font-size: 90%; }
+/* The real source of the dashboard's text scale, and it applies everywhere
+   including production. At 87% a `text-xs` rendered at 10.4px, which is why
+   the interface read as small; it also put rem sizes BELOW px ones, so
+   text-xs came out smaller than text-[11px] despite being nominally larger.
+   94% puts text-xs at 11.3px and body at 13.2px, without the jump to full
+   size that would reflow every dense table at once. Keep DEFAULT_THEME.scale
+   in step: the picker writes this same property inline. */
+html { font-size: 94%; }
 
 /*
- * Keep the entire viewport white, including overscroll outside the shell.
+ * Paint the document root + body navy. The shell's bg-app-navy lives on an inner
+ * div, so without this the page background behind it is the browser default
+ * (white) — which the macOS rubber-band overscroll bounces into view on a hard
+ * scroll. overscroll-behavior: none also stops the whole-page bounce.
  */
-html, body { background-color: #ffffff; color: #161616; }
+/* Reads the token rather than repeating its value, so it can never drift from
+   the palette — and so the theme picker's runtime override reaches it too. The
+   literal is only a fallback for the instant before the stylesheet applies. */
+html, body { background-color: var(--color-app-navy, #121649); }
 html { overscroll-behavior: none; }
-
-/* Legacy dark utility classes appear across older screens. Give them a
-   consistent light border/hover treatment while those screens are migrated. */
-.jp-shell [class*="border-white/"] { border-color: rgba(23, 35, 30, 0.11); }
-.jp-shell [class*="hover:border-white/"]:hover { border-color: rgba(23, 35, 30, 0.23); }
-.jp-shell [class*="hover:bg-white/"]:hover { background-color: #f2f2ef; }
-.jp-shell [class*="bg-white/"]:not([class*="hover:bg-white/"]) { background-color: #f6f6f3; }
 
 /* Tabular numerals on .num so columns of stats line up. */
 .num { font-variant-numeric: tabular-nums; }
 
+/* Tabular figures everywhere digits sit in a column.
+   There were 96 formatted numbers in table cells and 18 of them carried .num,
+   so most columns rendered in proportional figures: a 1 is narrower than a 7,
+   so 1,204 and 987 do not line up and the eye cannot scan down the column.
+   Tagging 91 call sites would drift again within a month, so it is a rule
+   about where numbers live instead. Harmless on text, since it only affects
+   digit glyphs. */
+.app-shell table td,
+.app-shell table th,
+.app-shell .app-stat,
+.app-shell [class*="tabular"] { font-variant-numeric: tabular-nums; }
+
 /* Scrollbars tuned to the dark surface. */
-.jp-shell * {
+.app-shell * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(23, 35, 30, 0.20) transparent;
+  scrollbar-color: rgba(96, 165, 250, 0.18) transparent;
 }
-.jp-shell *::-webkit-scrollbar { width: 10px; height: 10px; }
-.jp-shell *::-webkit-scrollbar-track { background: transparent; }
-.jp-shell *::-webkit-scrollbar-thumb {
-  background: rgba(23, 35, 30, 0.20);
+.app-shell *::-webkit-scrollbar { width: 10px; height: 10px; }
+.app-shell *::-webkit-scrollbar-track { background: transparent; }
+.app-shell *::-webkit-scrollbar-thumb {
+  background: rgba(96, 165, 250, 0.18);
   border-radius: 8px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
-.jp-shell *::-webkit-scrollbar-thumb:hover { background: rgba(23, 35, 30, 0.32); }
+.app-shell *::-webkit-scrollbar-thumb:hover { background: rgba(96, 165, 250, 0.32); }
 
 /*
- * Shared card treatment: a clear edge and restrained lift on white.
+ * .chart-card — thin blue gradient hairline at the top edge + soft lift.
  */
 .chart-card {
   position: relative;
-  border-color: rgba(23, 35, 30, 0.10);
-  box-shadow: 0 1px 2px rgba(23, 35, 30, 0.03), 0 12px 28px -20px rgba(23, 35, 30, 0.22);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03), 0 12px 32px -16px rgba(0, 0, 0, 0.45);
   transition: border-color 200ms ease;
 }
 .chart-card::before {
@@ -114,62 +197,729 @@ html { overscroll-behavior: none; }
   position: absolute;
   inset: 0 0 auto 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(17, 17, 17, 0.20), transparent);
+  background: linear-gradient(90deg, transparent, rgba(96, 165, 250, 0.45), transparent);
   pointer-events: none;
 }
-.chart-card:hover { border-color: rgba(17, 17, 17, 0.22); }
-.chart-card .text-emerald-400 { color: #047857; }
-.chart-card .text-rose-400 { color: #be123c; }
-.chart-card .text-amber-400 { color: #b45309; }
+.chart-card:hover { border-color: rgba(96, 165, 250, 0.22); }
 
-/* Staging banner offset: push the fixed sidebar below the 24px "STAGING" bar
-   (toggled by StagingBanner; production never gets this class). */
-.staging-env aside {
-  top: 1.5rem;
+
+/*
+ * Dialog entrance. A modal that simply appears is what makes a UI feel
+ * mechanical; a short rise reads as the surface arriving. Deliberately quick
+ * — anything slower gets tiring on a tool you use all day.
+ */
+@keyframes jpFade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes jpRise {
+  from { opacity: 0; transform: translateY(8px) scale(0.985); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-shell [class*="animate-[jpRise"],
+  .app-shell [class*="animate-[jpFade"] { animation: none !important; }
 }
 
-.able-topbar {
-  position: sticky; top: 0; z-index: 30; height: 68px; padding: 0 36px;
-  display: flex; align-items: center; justify-content: space-between;
-  border-bottom: 1px solid #e8e8e4; background: #ffffffed; backdrop-filter: blur(16px);
+/*
+ * Range inputs (theme picker).
+ *
+ * Native range styling on a dark surface is close to invisible and the default
+ * thumb is a small target. Explicit track and thumb, with a thumb big enough
+ * to grab without aiming.
+ */
+.app-shell .app-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 1.25rem;
+  background: transparent;
+  cursor: pointer;
 }
-.staging-env .able-topbar { top: 1.5rem; }
-.able-wordmark { display: inline-flex; align-items: center; gap: 9px; font-size: 19px; font-weight: 600; letter-spacing: -.7px; }
-.able-wordmark > span { width: 8px; height: 8px; border-radius: 2px; background: var(--color-able-orange); }
-.able-workspace { max-width: 1600px; margin: 0 auto; padding: 32px 36px calc(120px + env(safe-area-inset-bottom)); }
-.able-tabbar {
-  position: fixed; z-index: 40; left: 50%; transform: translateX(-50%); bottom: calc(14px + env(safe-area-inset-bottom));
-  display: flex; align-items: flex-end; gap: 6px; padding: 6px; width: max-content; max-width: calc(100% - 24px);
-  border: 1px solid #e2e1df; border-radius: 19px; background: #fffffff2; backdrop-filter: blur(18px);
-  box-shadow: 0 8px 32px #0000000d, 0 1px 3px #0000000a;
+.app-shell .app-range::-webkit-slider-runnable-track {
+  height: 0.3125rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
 }
-.able-tab { display: flex; min-width: 68px; min-height: 54px; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 8px 10px 7px; border-radius: 15px; color: #777 !important; font-size: 11px; line-height: 1.15; font-weight: 500; transition: background-color 120ms, color 120ms; }
-.able-tab svg { width: 20px; height: 20px; stroke-width: 1.7; }
-.able-tab:hover, .able-tab.is-open { color: #111 !important; background: #f4f4f1; }
-.able-tab.is-on { color: #fff !important; background: #111; box-shadow: 0 2px 5px #0002; }
-.able-nav-group { position: relative; }
-.able-nav-sheet { position: absolute; bottom: calc(100% + 20px); left: 50%; transform: translateX(-50%); width: min(340px, calc(100vw - 32px)); border: 1px solid #e2e1df; border-radius: 16px; padding: 7px; background: #fff; box-shadow: 0 12px 40px #00000014; }
-.able-nav-group:nth-child(2) .able-nav-sheet { left: 0; transform: none; }
-.able-nav-group:last-child .able-nav-sheet { left: auto; right: 0; transform: none; }
-.able-nav-sheet > p { padding: 6px 10px; color: #85847e; font-size: 9px; letter-spacing: .8px; text-transform: uppercase; font-weight: 500; }
-.able-nav-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }
-.able-nav-grid a { display: flex; align-items: center; gap: 8px; padding: 10px; min-height: 40px; border-radius: 11px; color: #72716d; font-size: 12px; }
-.able-nav-grid svg { width: 15px; height: 15px; flex-shrink: 0; }
-.able-nav-grid a:hover { color: #111; background: #f4f4f1; }
-.able-nav-grid a[aria-current="page"] { background: #111; color: #fff; }
-.jp-shell .able-nav-disclosure { position: absolute; top: 1px; right: 1px; width: 20px; height: 20px; border-radius: 5px; font-size: 12px; opacity: 0; color: #72716d; }
-.able-nav-group:focus-within .able-nav-disclosure, .able-nav-disclosure:focus-visible { opacity: 1; background: #f4f4f1; }
-.able-tab:focus-visible, .able-nav-grid a:focus-visible, .able-nav-disclosure:focus-visible { outline: 2px solid #111; outline-offset: 3px; }
-@media (max-width: 640px) {
-  .able-topbar { padding: 0 16px; height: 60px; }
-  .able-workspace { padding: 24px 16px calc(110px + env(safe-area-inset-bottom)); }
-  .able-tabbar { width: calc(100% - 20px); max-width: none; gap: 2px; padding: 5px; }
-  .able-tabbar > .able-tab, .able-nav-group { flex: 1; min-width: 0; }
-  .able-tab { min-width: 0; width: 100%; min-height: 52px; padding: 8px 2px; font-size: 9px; }
-  .able-tab svg { width: 19px; height: 19px; }
-  .able-nav-group { position: static; }
-  .able-nav-sheet, .able-nav-group:nth-child(2) .able-nav-sheet, .able-nav-group:last-child .able-nav-sheet { left: 50%; right: auto; transform: translateX(-50%); }
-  .jp-shell .able-nav-disclosure { position: static; height: 0; width: 100%; overflow: hidden; }
-  .jp-shell .able-nav-disclosure:focus-visible { height: 20px; }
+.app-shell .app-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 0.875rem;
+  height: 0.875rem;
+  margin-top: -0.28125rem;
+  border-radius: 999px;
+  background: var(--color-app-blue-light);
+  border: 2px solid var(--color-app-navy-raised);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  transition: transform 120ms ease;
 }
-@media (prefers-reduced-motion: reduce) { .able-tab { transition: none; } }
+.app-shell .app-range:hover::-webkit-slider-thumb { transform: scale(1.15); }
+.app-shell .app-range:active::-webkit-slider-thumb { transform: scale(1.05); }
+.app-shell .app-range::-moz-range-track {
+  height: 0.3125rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+}
+.app-shell .app-range::-moz-range-thumb {
+  width: 0.875rem;
+  height: 0.875rem;
+  border-radius: 999px;
+  background: var(--color-app-blue-light);
+  border: 2px solid var(--color-app-navy-raised);
+}
+
+/*
+ * Toasts.
+ *
+ * react-toastify ships its own look — its own greens, its own radius, a heavy
+ * progress bar — which landed on the dashboard as an obvious foreign object.
+ * Retheming through its custom properties keeps that to CSS rather than
+ * wrapping every toast() call in a custom component.
+ *
+ * The surface is the same raised navy as menus and the theme picker, so a
+ * toast reads as part of the app rather than a browser notification. Status
+ * shows in the icon and a thin progress line, not by flooding the whole card.
+ */
+.Toastify {
+  --toastify-toast-bd-radius: 0.875rem;
+  --toastify-toast-shadow: 0 12px 32px -12px rgb(0 0 0 / 0.7);
+  --toastify-toast-min-height: 0;
+  --toastify-toast-padding: 0.875rem 1rem;
+  --toastify-font-family: inherit;
+
+  /* Every variant sits on the same surface — colour is a signal, not a wash. */
+  --toastify-color-dark: var(--color-app-navy-raised);
+  --toastify-color-success: var(--color-app-navy-raised);
+  --toastify-color-error: var(--color-app-navy-raised);
+  --toastify-color-warning: var(--color-app-navy-raised);
+  --toastify-color-info: var(--color-app-navy-raised);
+  --toastify-text-color-dark: var(--color-ink);
+
+  --toastify-icon-color-success: #34d399;
+  --toastify-icon-color-error: #fb7185;
+  --toastify-icon-color-warning: #fbbf24;
+  --toastify-icon-color-info: var(--color-app-blue-light);
+
+  --toastify-color-progress-dark: var(--color-app-blue);
+  --toastify-color-progress-success: #34d399;
+  --toastify-color-progress-error: #fb7185;
+  --toastify-color-progress-warning: #fbbf24;
+  --toastify-color-progress-info: var(--color-app-blue);
+}
+
+.Toastify__toast {
+  border: 1px solid rgb(255 255 255 / 0.09);
+  backdrop-filter: blur(12px);
+  font-size: 0.875rem;
+  line-height: 1.45;
+  align-items: center;
+}
+
+.Toastify__toast-body {
+  margin: 0;
+  padding: 0;
+  font-weight: 500;
+}
+
+/* A hairline, not the slab it ships with. */
+.Toastify__progress-bar {
+  height: 2px;
+  opacity: 0.7;
+}
+
+.Toastify__close-button {
+  align-self: center;
+  color: var(--color-ink-faint);
+  opacity: 1;
+  transition: color 150ms ease;
+}
+.Toastify__close-button:hover { color: var(--color-ink); }
+
+/*
+ * Email body editor content.
+ *
+ * Tailwind's preflight is deliberately off in this app, so the editor's
+ * headings and lists arrive with no styling at all — they'd render identically
+ * to body text and the formatting buttons would look broken. These give the
+ * document just enough shape to read as what it will become.
+ */
+.app-shell .prose-email h2 {
+  font-size: 1.35em;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 1.1em 0 0.4em;
+}
+.app-shell .prose-email h3 {
+  font-size: 1.12em;
+  font-weight: 600;
+  line-height: 1.35;
+  margin: 1em 0 0.35em;
+}
+.app-shell .prose-email h2:first-child,
+.app-shell .prose-email h3:first-child,
+.app-shell .prose-email p:first-child { margin-top: 0; }
+.app-shell .prose-email p { margin: 0 0 0.75em; }
+.app-shell .prose-email p:last-child { margin-bottom: 0; }
+.app-shell .prose-email strong { font-weight: 650; }
+.app-shell .prose-email em { font-style: italic; }
+.app-shell .prose-email a {
+  color: var(--color-app-blue-light);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.app-shell .prose-email ul,
+.app-shell .prose-email ol { margin: 0 0 0.75em; padding-left: 1.35em; }
+.app-shell .prose-email ul { list-style: disc; }
+.app-shell .prose-email ol { list-style: decimal; }
+.app-shell .prose-email li { margin: 0.2em 0; }
+.app-shell .prose-email img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  margin: 0.5em 0;
+}
+/* Tiptap's placeholder — only on a genuinely empty document. */
+.app-shell .prose-email p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--color-ink-faint);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------- nav shells
+
+   Shared chrome for the alternative navigation modes (rail / bottom / top).
+   Motion here is deliberately short — 90 to 140ms — because these are controls
+   you hit dozens of times an hour. Anything slower reads as lag rather than
+   polish. Everything is wrapped so a viewer with reduced-motion set gets the
+   state change without the movement. */
+
+.app-rail-btn {
+  display: flex;
+  height: 2.35rem;
+  width: 2.35rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.7rem;
+  color: var(--color-ink-muted);
+  transition: background-color 120ms ease, color 120ms ease, transform 120ms ease;
+}
+.app-rail-btn:hover {
+  background: rgb(255 255 255 / 0.05);
+  color: var(--color-ink);
+}
+.app-rail-btn:active { transform: scale(0.94); }
+.app-rail-btn.is-on {
+  background: color-mix(in oklab, var(--color-app-blue) 16%, transparent);
+  color: var(--color-ink);
+}
+.app-rail-btn.is-on svg { color: var(--color-app-blue); }
+
+/* Tooltip on the rail's flyout-less items. */
+.relative:hover > .app-rail-tip { opacity: 1; }
+
+.app-flyout {
+  transform-origin: left center;
+  animation: app-flyout-in 110ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes app-flyout-in {
+  from { opacity: 0; transform: translateX(-4px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Bottom tab bar. */
+.app-tabbar { transition: transform 140ms cubic-bezier(0.22, 1, 0.36, 1); }
+.app-tab {
+  display: flex;
+  min-width: 4.25rem;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.22rem;
+  border-radius: 0.95rem;
+  padding: 0.5rem 0.62rem 0.45rem;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1.15;
+  color: var(--color-ink-faint);
+  transition: background-color 120ms ease, color 120ms ease, transform 120ms ease;
+}
+.app-tab:hover { color: var(--color-ink); background: rgb(255 255 255 / 0.04); }
+.app-tab:active { transform: scale(0.95); }
+/* The sheet is open for this tab. Deliberately the same weight as :hover, not
+   the accent fill: the accent says "you are here", and a menu you have merely
+   raised has not taken you anywhere. It stays on while the pointer is inside
+   the sheet, so you can still see which section you are reading. */
+.app-tab.is-open { color: var(--color-ink); background: rgb(255 255 255 / 0.04); }
+.app-tab.is-on {
+  background: color-mix(in oklab, var(--color-app-blue) 14%, transparent);
+  color: var(--color-ink);
+}
+.app-tab.is-on svg { color: var(--color-app-blue); }
+
+.app-sheet {
+  transform-origin: bottom center;
+  animation: app-sheet-in 140ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes app-sheet-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Top bar. */
+.app-toptab {
+  white-space: nowrap;
+  border-radius: 0.6rem;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.8125rem;
+  color: var(--color-ink-muted);
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.app-toptab:hover { background: rgb(255 255 255 / 0.05); color: var(--color-ink); }
+.app-toptab.is-on { background: color-mix(in oklab, var(--color-app-blue) 15%, transparent); color: var(--color-ink); }
+
+.app-subtab {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+  border-radius: 0.55rem;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.75rem;
+  color: var(--color-ink-faint);
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.app-subtab:hover { background: rgb(255 255 255 / 0.04); color: var(--color-ink); }
+.app-subtab.is-on { color: var(--color-ink); background: rgb(255 255 255 / 0.06); }
+.app-subtab.is-on svg { color: var(--color-app-blue); }
+
+.app-topaction {
+  display: flex;
+  height: 1.9rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.6rem;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  padding: 0 0.5rem;
+  color: var(--color-ink-muted);
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.app-topaction:hover { background: rgb(255 255 255 / 0.05); color: var(--color-ink); }
+
+/* Command palette. */
+.app-palette-veil { animation: app-fade-in 110ms ease-out; }
+.app-palette { animation: app-palette-in 140ms cubic-bezier(0.22, 1, 0.36, 1); }
+@keyframes app-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes app-palette-in {
+  from { opacity: 0; transform: translateY(-8px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-flyout, .app-sheet, .app-palette, .app-palette-veil { animation: none; }
+  .app-rail-btn, .app-tab, .app-toptab, .app-subtab, .app-topaction, .app-tabbar { transition: none; }
+  .app-rail-btn:active, .app-tab:active { transform: none; }
+}
+
+/* A hairline of light along the palette's top edge. Cheap way to make a
+   floating panel read as lit from above rather than as a flat rectangle. */
+.app-palette::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.16), transparent);
+  pointer-events: none;
+}
+
+/* ------------------------------------------------- presentation: "focused"
+
+   Everything here hangs off `data-presentation="focused"` on the shell root,
+   so Classic is untouched and the two can be compared on the real screens.
+
+   What it is reacting to: the bottom bar handed every page back ~256px, and
+   the screens were composed for the narrower canvas. Four stat cards across a
+   1900px window is one number per 460px, which reads as sparse rather than
+   informed. So: fit more across, anchor the figures to the left where the eye
+   already is, and spend less vertical space before the first data.
+
+   Selectors are one class deep on purpose. They have to beat Tailwind
+   utilities on the same elements, which is why they carry !important — the
+   alternative is prop-threading a mode through 35 views. */
+
+[data-presentation="focused"] .app-stat-grid {
+  grid-template-columns: repeat(auto-fit, minmax(12.5rem, 1fr)) !important;
+  gap: 0.75rem !important;
+}
+
+/* Figures anchor left. Centred, a number in a wide card floats away from its
+   own label; left-aligned, label and value stack into a column the eye can
+   run straight down. */
+[data-presentation="focused"] .app-fincard {
+  align-items: flex-start !important;
+  text-align: left !important;
+  padding: 0.95rem 1.05rem 1rem !important;
+}
+[data-presentation="focused"] .app-fincard-label {
+  font-size: 0.65rem !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.08em !important;
+}
+[data-presentation="focused"] .app-fincard-value {
+  margin-top: 0.5rem !important;
+  font-size: 1.9rem !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.02em !important;
+}
+
+/* Same move for the other stat card, so the two stop looking like different
+   design languages on different screens. */
+[data-presentation="focused"] .app-stat { padding: 1rem 1.05rem !important; }
+[data-presentation="focused"] .app-stat .num { font-size: 1.9rem !important; font-weight: 600 !important; }
+
+/* Headers give back vertical space. A 2xl title plus a subtitle costs ~5rem
+   before any data on a page that now has room to show more of it. */
+[data-presentation="focused"] .app-page-header { margin-bottom: 1rem !important; }
+[data-presentation="focused"] .app-page-header h1 { font-size: 1.4rem !important; letter-spacing: -0.02em !important; }
+[data-presentation="focused"] .app-page-header p { margin-top: 0.15rem !important; font-size: 0.8125rem !important; }
+
+/* Card chrome tightens to match, and its title adopts the stat label's voice
+   so a section heading and a figure heading read as one system. */
+[data-presentation="focused"] .app-card-head { padding: 0.7rem 1.05rem !important; }
+[data-presentation="focused"] .app-card-head h2 {
+  font-size: 0.7rem !important;
+  font-weight: 500 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.08em !important;
+  color: var(--color-ink-faint) !important;
+}
+[data-presentation="focused"] .app-card-body { padding: 1.05rem !important; }
+
+/* Aligned figures. The single strongest "this is instrumentation" cue in a
+   dashboard: digits in a column line up instead of jittering by glyph width. */
+[data-presentation="focused"] .num,
+[data-presentation="focused"] table td,
+[data-presentation="focused"] table th { font-variant-numeric: tabular-nums; }
+
+/* The canvas, under Focused.
+   Capped so nothing stretches to an unreadable width, and centred so the page
+   reads as a composed sheet rather than content pinned to the window edge.
+   Vertical padding comes down too: with no sidebar there is no chrome framing
+   the top of the page, so 2rem of dead space above the title was doing nothing
+   but pushing data below the fold. */
+[data-presentation="focused"] .app-canvas {
+  max-width: 108rem;
+  margin-inline: auto;
+  padding-top: 1.35rem !important;
+  padding-bottom: 5.5rem !important;
+}
+
+/* ---- Focused: tables ------------------------------------------------------
+   18 screens show a table and only 4 go through DataTable, so row padding had
+   drifted to three different values (px-4 py-3, px-3 py-2, px-4 py-2.5). This
+   is where "uniform" actually gets decided, and doing it in CSS reaches every
+   hand-rolled one at once.
+
+   The row hover is not decoration. On a full-width table a row can be 1600px
+   across, and tracking a single record from its name to its numbers is the
+   thing that gets hard — a whole-row tint is what lets the eye run straight
+   across without losing its line. */
+[data-presentation="focused"] table { width: 100%; }
+
+[data-presentation="focused"] table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  padding: 0.5rem 0.85rem !important;
+  font-size: 0.6875rem !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.04em;
+  background: color-mix(in oklab, var(--color-app-navy-card) 96%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+[data-presentation="focused"] table tbody td {
+  padding: 0.5rem 0.85rem !important;
+  font-size: 0.8125rem !important;
+}
+
+[data-presentation="focused"] table tbody tr {
+  transition: background-color 90ms ease;
+}
+[data-presentation="focused"] table tbody tr:hover {
+  background: rgb(255 255 255 / 0.035);
+}
+
+/* Numeric columns line up on the decimal, which is most of what makes a table
+   of figures readable at a glance. */
+[data-presentation="focused"] table td.num,
+[data-presentation="focused"] table td .num { font-variant-numeric: tabular-nums; }
+
+
+/* ===========================================================================
+   Brand mode
+   ---------------------------------------------------------------------------
+   Not a palette swap. This is the app's actual chrome, taken from the iOS
+   source rather than matched by eye:
+
+     background  Core/Onboarding/Components/OnboardingBackground.swift ->
+                 StarsBackground = LinearBackground + the starfield at 0.7
+     gradient    Components/Views/Background/LinearBackground.swift ->
+                 #011028 -> #000814 -> #011028, top to bottom
+     colours     Assets.xcassets/ColorPalette
+
+   The colour overrides carry !important because the theme picker writes its
+   values as inline styles on :root, which would otherwise win. That is the
+   right trade here: this mode is "what the app looks like", so the sliders
+   should not be able to half-apply to it.
+   =========================================================================== */
+[data-presentation="brand"] {
+  /* Lifted these once and the owner preferred them where they were, so they are
+     back. The screen looked flat because the starfield was not rendering at
+     all, not because the cards were too dark. */
+  --color-app-navy: #000814 !important;
+  --color-app-navy-light: #011028 !important;
+  --color-app-navy-card: #01193c !important;
+  --color-app-navy-raised: #023a82 !important;   /* LiquidGlassLightBackgroundStroke */
+  --color-app-blue: #0597ff !important;          /* the brand blue */
+  --color-app-blue-light: #3fd8fa !important;    /* customBlue2 */
+  --color-app-blue-dark: #0089f1 !important;     /* PrimaryButton */
+  --color-stat: #d8ecff !important;
+  --color-rule: rgba(40, 69, 108, 0.55) !important;
+  --color-rule-strong: rgba(40, 69, 108, 0.9) !important;
+  --app-glass-stroke: #28456c;
+  --app-radius: 1.25rem;
+}
+
+/* The onboarding background: the gradient, then the starfield over it.
+   Fixed so it behaves like a backdrop rather than scrolling with content. */
+.app-shell[data-presentation="brand"] {
+  background:
+    linear-gradient(180deg, #011028 0%, #000814 50%, #011028 100%) !important;
+  position: relative;
+  /* Required, and not cosmetic. The starfield below is a z-index: -1
+     pseudo-element, and `position: relative` with `z-index: auto` does NOT
+     create a stacking context — so the pseudo escapes to the nearest ancestor
+     that does and paints behind that ancestor's opaque background, i.e. it
+     disappears. `isolate` makes this element the stacking context, which
+     clamps the pseudo to painting above this background and below this
+     content, without putting a z-index on any child. */
+  isolation: isolate;
+}
+.app-shell[data-presentation="brand"]::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  /* NOT cover. The asset is 860x1864 portrait with an alpha channel, so on a
+     wide desktop cover scales it to the viewport width and every star is blown
+     up over 1.6x and spread thin — which is why it stopped reading as a
+     starfield. Tiling at roughly native size keeps stars phone-sized and puts
+     the same density across a much wider canvas. The transparency is what
+     makes tiling work: it lays stars over the gradient rather than a second
+     background over it. */
+  background-image: url("/stars-background.png");
+  /* 430px, not 620. The asset is 860px wide, so a 620px tile asks for 1240
+     device pixels on a 2x screen and the browser upscales it 1.44x — which is
+     the fuzziness, not the blur below. At 430 each tile is exactly one source
+     pixel per device pixel, and it simply repeats more times across the width.
+     It also matches the app: 860px over a ~390pt phone screen is about this
+     tile size, so the stars come out the size they are in onboarding. */
+  background-size: 430px auto;
+  background-repeat: repeat;
+  background-position: center top;
+  /* 0.7 is the app's value against a 390pt screen. Spread over a desktop the
+     field reads fainter, so it is lifted to hold the same presence. */
+  opacity: 0.85;
+  /* Barely any, now that the tile is pixel-native. 1.1px was compensating for
+     an upscale as much as separating focal planes, and it read as low quality.
+     0.3px still keeps pin-sharp stars off the same plane as 11px labels. */
+  filter: blur(0.3px);
+  pointer-events: none;
+  /* Behind the content, not in front of it.
+     
+     This was z-index: 0, which meant a positioned pseudo-element painting over
+     the shell's ordinary in-flow children, so every child had to be lifted with
+     `> * { position: relative; z-index: 1 }`. That rule also hit the two
+     children that are deliberately `position: fixed` — the bottom bar and the
+     theme picker — and forcing them to relative dropped them back into normal
+     flow, which put the nav at the top of the page and the palette in the
+     corner.
+     
+     -1 solves it without touching a single child: .app-shell is positioned and
+     paints its own background, so a -1 pseudo-element sits above that
+     background and below the content, and fixed children keep being fixed. */
+  z-index: -1;
+}
+
+/* Cards read as glass over the starfield rather than solid panels, which is
+   what stops the background from being wallpaper you cannot see. */
+[data-presentation="brand"] .chart-card,
+[data-presentation="brand"] .app-card,
+[data-presentation="brand"] .app-page-header + div .rounded-xl {
+  border-radius: var(--app-radius);
+  border-color: var(--app-glass-stroke) !important;
+  /* Opaque. The stars go behind the content, not through it. */
+  background-color: #01193c !important;
+  backdrop-filter: blur(14px);
+}
+
+/* The accent blooms in the app: the streak ring, the active tab. Primary
+   actions and the active nav item carry the same bloom here. */
+[data-presentation="brand"] .app-tab.is-on,
+[data-presentation="brand"] button[class*="from-app-blue"] {
+  box-shadow: 0 0 0 1px rgba(5, 151, 255, 0.35), 0 6px 26px -6px rgba(5, 151, 255, 0.7);
+}
+
+/* Danger and warning were too close to tell apart. The app keeps them far
+   apart: DestructiveButton #dc0307 against WarningButton #f2771f. */
+[data-presentation="brand"] button[class*="from-rose"] {
+  background: linear-gradient(180deg, #dc0307, #a80205) !important;
+  box-shadow: 0 6px 20px -6px rgba(220, 3, 7, 0.75) !important;
+}
+[data-presentation="brand"] button[class*="from-amber"] {
+  background: linear-gradient(180deg, #f2771f, #c25a12) !important;
+  color: #fff !important;
+  box-shadow: 0 6px 20px -6px rgba(242, 119, 31, 0.7) !important;
+}
+
+/* Every surface on the navy ramp goes opaque in this mode.
+   168 of them carry Tailwind alpha suffixes (/40, /60, /50) which were fine
+   over a solid page and turn see-through over a starfield: tables, campaign
+   rows and journey steps all had stars showing through their fills. Chasing
+   168 call sites would be pointless and would drift, so this is a rule about
+   the class pattern. The starfield belongs in the gaps between cards, which is
+   where the app puts it, not behind the text you are reading. */
+.app-shell[data-presentation="brand"] [class*="bg-app-navy-card"] {
+  background-color: #01193c !important;
+}
+.app-shell[data-presentation="brand"] [class*="bg-app-navy-light"] {
+  background-color: #04143a !important;
+}
+.app-shell[data-presentation="brand"] [class*="bg-app-navy-raised"] {
+  background-color: #052154 !important;
+}
+
+/* The floating chrome is the exception: a tab bar and a popover SHOULD read as
+   glass, because they sit above the page rather than being part of it. Placed
+   after the blanket rule so it wins. */
+.app-shell[data-presentation="brand"] .app-tabbar,
+.app-shell[data-presentation="brand"] .app-sheet {
+  background-color: rgba(1, 16, 40, 0.9) !important;
+  border-color: var(--app-glass-stroke) !important;
+  backdrop-filter: blur(22px);
+}
+
+/* Inputs and the bottom bar pick up the same hairline the app uses. */
+[data-presentation="brand"] input,
+[data-presentation="brand"] textarea,
+[data-presentation="brand"] select {
+  border-color: var(--app-glass-stroke) !important;
+  border-radius: 0.875rem;
+}
+[data-presentation="brand"] .app-tabbar,
+[data-presentation="brand"] .app-sheet {
+  border-color: var(--app-glass-stroke) !important;
+  background-color: rgba(1, 16, 40, 0.78) !important;
+  backdrop-filter: blur(22px);
+}
+
+/* ---------------------------------------------------------------------------
+   Brand mode, pass 2: readability and one radius scale.
+
+   Measured against the onboarding screen rather than guessed. The app's
+   smallest label is around 13px on a 390pt phone; the dashboard's micro-labels
+   are 10-11px on a monitor twice the size, which is why the numbers read as
+   dense rather than informative. And the primitives had no shared radius at
+   all: a rounded-xl container with a rounded-lg pill inside it, plus lg/xl/2xl
+   scattered across cards, buttons, inputs and modals.
+   --------------------------------------------------------------------------- */
+
+/* One scale, by role, rather than whatever each file happened to pick. */
+[data-presentation="brand"] [class*="rounded-2xl"] { border-radius: 1.5rem; }
+[data-presentation="brand"] [class*="rounded-xl"]  { border-radius: 1.25rem; }
+[data-presentation="brand"] [class*="rounded-lg"]  { border-radius: 0.875rem; }
+
+/* Concentric, which is the actual rule a pill inside a padded container
+   follows: inner radius = outer radius minus the padding. The container is
+   1.25rem with 0.25rem of padding, so the pill is 1rem. Matching them exactly,
+   as they were, is what makes the corners look wrong. */
+[data-presentation="brand"] .app-tabs { border-radius: 1.25rem; }
+[data-presentation="brand"] .app-tabs-pill { border-radius: 1rem; }
+
+/* Nothing in the app is smaller than this.
+   
+   These are deliberately in PIXELS, not rem. The classes being overridden are
+   absolute px values, and the theme runs the root at 87%, so a rem override
+   gets scaled straight back down: 0.8125rem lands at 11.31px against the 11px
+   it was replacing, which is not a change anyone can see. */
+[data-presentation="brand"] [class*="text-[10px]"] { font-size: 12px; }
+[data-presentation="brand"] [class*="text-[11px]"] { font-size: 13px; }
+[data-presentation="brand"] [class*="text-[0.625rem]"] { font-size: 12px; }
+[data-presentation="brand"] [class*="text-[0.6875rem]"] { font-size: 13px; }
+[data-presentation="brand"] [class*="text-[0.7rem]"] { font-size: 13px; }
+[data-presentation="brand"] [class*="text-[0.75rem]"] { font-size: 13px; }
+[data-presentation="brand"] [class*="text-[0.8125rem]"] { font-size: 14px; }
+
+/* Secondary text in the app is far brighter than ours, and our ink-faint at
+   11px was not readable against the brand background. */
+[data-presentation="brand"] {
+  --color-ink-muted: #b8cde4 !important;
+  --color-ink-faint: #8fa9c6 !important;
+}
+
+/* Table headers were the worst of it: 11px uppercase with heavy tracking, on
+   the densest screens we have. */
+[data-presentation="brand"] table th {
+  font-size: 13px !important;
+  letter-spacing: 0.04em;
+  color: var(--color-ink-muted) !important;
+}
+
+/* Cards in the app carry a visible blue edge, not a hairline that disappears
+   against the starfield. */
+[data-presentation="brand"] .chart-card,
+[data-presentation="brand"] .app-card {
+  border-width: 1px;
+  border-color: rgba(40, 69, 108, 0.9) !important;
+}
+
+/* Table toolbars share the small Button height; forms keep their own sizing. */
+.app-toolbar input:not([type="checkbox"]):not([type="radio"]),
+.app-toolbar select {
+  box-sizing: border-box;
+  height: 2.125rem;
+  min-height: 2.125rem;
+  padding-top: 0;
+  padding-bottom: 0;
+  font-size: 0.8125rem;
+}
+.app-toolbar input:focus-visible,
+.app-toolbar select:focus-visible {
+  outline: 2px solid var(--color-app-blue-light);
+  outline-offset: 2px;
+}
+
+[data-presentation="brand"] .app-toolbar input:not([type="checkbox"]):not([type="radio"]),
+[data-presentation="brand"] .app-toolbar select { font-size: 14px; }
+
+/* Shared table surfaces: eliminate the browser's default cell gaps and give
+   sticky headings a solid edge in every presentation mode. Separate borders
+   with zero spacing keep the header edge visible while its rows scroll. */
+table { border-collapse: separate; border-spacing: 0; }
+table thead th,
+[data-presentation="focused"] table thead th {
+  background: var(--color-app-navy-card);
+  box-shadow: inset 0 -1px 0 rgb(255 255 255 / 0.15), 0 1px 0 rgb(0 0 0 / 0.18);
+  backdrop-filter: none;
+}
+table tbody td { border-bottom: 1px solid rgb(255 255 255 / 0.055); }
+table tbody tr:last-child > td { border-bottom: 0; }
+table tbody tr:hover { background-color: rgb(255 255 255 / 0.035); }
+table tbody tr[data-selected="true"],
+[data-presentation="focused"] table tbody tr[data-selected="true"] {
+  background-color: color-mix(in oklab, var(--color-app-blue) 16%, var(--color-app-navy-card));
+}
+table tbody tr[data-row-action]:focus-visible {
+  outline: 2px solid var(--color-app-blue-light);
+  outline-offset: -2px;
+}

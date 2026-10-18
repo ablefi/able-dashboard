@@ -1,16 +1,17 @@
 import "server-only";
+import { withMarketTag } from "@/lib/creatorMarket";
 import { sbGet, sbInsert, sbPatch, sbDelete } from "@/lib/scrape";
-import { JPC_TAG, JPP_TAG, withResponsibility, slugForCreator, type Platform, type Responsibility } from "@/lib/creators";
+import { ROSTER_TAG, PROSPECT_TAG, withResponsibility, slugForCreator, type Platform, type Responsibility } from "@/lib/creators";
 
 /**
- * Creator + prospect management — ported from jp-creators' actions.ts CRUD
+ * Creator + prospect management — ported from roster' actions.ts CRUD
  * over PostgREST. Auto-pull on create/handle-change is triggered by the
  * client (it calls /api/creators/refresh + /profile after a successful
  * create), so these functions stay pure DB ops.
  */
 
 const trim = (v: unknown): string => (v ? String(v).trim().replace(/^@/, "") : "");
-const RESP_VALUES: Responsibility[] = ["adam", "salma", "both", "moving_to_salma"];
+const RESP_VALUES: Responsibility[] = ["owner", "teammate", "both", "moving_to_teammate"];
 const FINANCE_ZEROS = { deal_type: null, flat_fee: 0, cpm_rate: 0, hybrid_base: 0, hybrid_cpm: 0, posts_per_month: 0, rate_per_view: 0 };
 
 type Result = { ok: boolean; error?: string; id?: string; slug?: string; existingId?: string };
@@ -36,7 +37,7 @@ export async function createCreator(input: Record<string, any>): Promise<Result>
   const parent_id = type !== "persona" && input.parent_id ? String(input.parent_id) : null;
 
   if (type !== "persona") {
-    const existing = await findByHandles(JPC_TAG, { ig, tt, yt });
+    const existing = await findByHandles(ROSTER_TAG, { ig, tt, yt });
     if (existing) {
       const which = ig && existing.instagram_handle === ig ? `@${ig} (Instagram)` : tt && existing.tiktok_handle === tt ? `@${tt} (TikTok)` : yt && existing.youtube_handle === yt ? `@${yt} (YouTube)` : "that handle";
       return { ok: false, error: `${which} is already tracked as "${existing.name}".`, existingId: existing.id };
@@ -44,7 +45,7 @@ export async function createCreator(input: Record<string, any>): Promise<Result>
   }
   const created = await sbInsert("creators", {
     name, instagram_handle: type === "persona" ? null : ig || null, tiktok_handle: type === "persona" ? null : tt || null, youtube_handle: type === "persona" ? null : yt || null,
-    type, status: "active", parent_id, profile_image_url: null, tags: [JPC_TAG], ...FINANCE_ZEROS,
+    type, status: "active", parent_id, profile_image_url: null, tags: withMarketTag([ROSTER_TAG], input.market === "alt" ? "alt" : "en"), ...FINANCE_ZEROS,
   }, true);
   const row = created[0];
   if (!row) return { ok: false, error: "Insert failed" };
@@ -69,7 +70,7 @@ export async function updateCreator(input: Record<string, any>): Promise<Result>
     const child = await sbInsert("creators", {
       name: childName, instagram_handle: cur.instagram_handle, tiktok_handle: cur.tiktok_handle, youtube_handle: cur.youtube_handle,
       type: cur.type === "influencer" || cur.type === "youtuber" ? cur.type : "daily_ugc",
-      status: "active", parent_id: id, profile_image_url: null, tags: [JPC_TAG], ...FINANCE_ZEROS,
+      status: "active", parent_id: id, profile_image_url: null, tags: [ROSTER_TAG], ...FINANCE_ZEROS,
     }, true);
     const childId = child[0]?.id;
     if (childId) await sbPatch("posts", `creator_id=eq.${id}`, { creator_id: childId });
@@ -78,11 +79,15 @@ export async function updateCreator(input: Record<string, any>): Promise<Result>
   const payload: Record<string, unknown> = {
     name, instagram_handle: newType === "persona" ? null : ig || null, tiktok_handle: newType === "persona" ? null : tt || null, youtube_handle: newType === "persona" ? null : yt || null, type: newType, parent_id,
   };
-  // Responsibility: only touch tags when the field is explicitly present.
+  // Responsibility and section: only touch tags when the field is explicitly
+  // present. The route decides whether a section move is allowed.
+  let tags: string[] | null = null;
   if (input.responsibility !== undefined) {
     const next: Responsibility | null = input.responsibility === "" || input.responsibility == null ? null : RESP_VALUES.includes(input.responsibility) ? input.responsibility : null;
-    payload.tags = withResponsibility(cur?.tags ?? [], next);
+    tags = withResponsibility(cur?.tags ?? [], next);
   }
+  if (input.market === "alt" || input.market === "en") tags = withMarketTag(tags ?? cur?.tags ?? [], input.market);
+  if (tags) payload.tags = tags;
   await sbPatch("creators", `id=eq.${id}`, payload);
   return { ok: true };
 }
@@ -127,11 +132,11 @@ export async function createProspect(input: Record<string, any>): Promise<Result
   if (!name) return { ok: false, error: "Name is required" };
   const ig = trim(input.instagram_handle), tt = trim(input.tiktok_handle), yt = trim(input.youtube_handle);
   if (!ig && !tt && !yt) return { ok: false, error: "At least one platform handle is required" };
-  const dupe = await findByHandles(JPP_TAG, { ig, tt, yt });
+  const dupe = await findByHandles(PROSPECT_TAG, { ig, tt, yt });
   if (dupe) return { ok: false, error: `Already tracked as prospect "${dupe.name}".` };
   const created = await sbInsert("creators", {
     name, instagram_handle: ig || null, tiktok_handle: tt || null, youtube_handle: yt || null,
-    type: "daily_ugc", status: "active", parent_id: null, profile_image_url: null, tags: [JPP_TAG], ...FINANCE_ZEROS,
+    type: "daily_ugc", status: "active", parent_id: null, profile_image_url: null, tags: withMarketTag([PROSPECT_TAG], input.market === "alt" ? "alt" : "en"), ...FINANCE_ZEROS,
   }, true);
   const row = created[0];
   if (!row) return { ok: false, error: "Insert failed" };
@@ -151,7 +156,7 @@ export async function updateProspect(input: Record<string, any>): Promise<Result
   if (tt && tt !== cur?.tiktok_handle) changed.tt = tt;
   if (yt && yt !== cur?.youtube_handle) changed.yt = yt;
   if (Object.keys(changed).length > 0) {
-    const dupe = await findByHandles(JPP_TAG, changed, id);
+    const dupe = await findByHandles(PROSPECT_TAG, changed, id);
     if (dupe) return { ok: false, error: `Already tracked as prospect "${dupe.name}".` };
   }
   const handleChanged = (ig || null) !== (cur?.instagram_handle ?? null) || (tt || null) !== (cur?.tiktok_handle ?? null) || (yt || null) !== (cur?.youtube_handle ?? null);
@@ -161,7 +166,9 @@ export async function updateProspect(input: Record<string, any>): Promise<Result
 
 export async function promoteProspect(id: string): Promise<Result> {
   if (!id) return { ok: false, error: "Missing id" };
-  await sbPatch("creators", `id=eq.${id}`, { tags: [JPC_TAG] });
+  // Keep the section: a second-market prospect becomes a second-market creator.
+  const cur = (await sbGet(`creators?select=tags&id=eq.${id}&limit=1`))[0] as { tags?: string[] | null } | undefined;
+  await sbPatch("creators", `id=eq.${id}`, { tags: withMarketTag([ROSTER_TAG], (cur?.tags ?? []).includes("market:alt") ? "alt" : "en") });
   return { ok: true };
 }
 export async function deleteProspect(id: string): Promise<Result> {
@@ -204,9 +211,9 @@ function parsePostUrl(raw: string): { platform: Platform; external_id: string; c
 }
 
 async function ensureExternalCreator(): Promise<string> {
-  const existing = await sbGet(`creators?select=id&name=eq.External&tags=cs.${encodeURIComponent(`{${JPC_TAG}}`)}&limit=1`);
+  const existing = await sbGet(`creators?select=id&name=eq.External&tags=cs.${encodeURIComponent(`{${ROSTER_TAG}}`)}&limit=1`);
   if (existing.length > 0) return existing[0].id;
-  const created = await sbInsert("creators", { name: "External", type: "other", status: "archived", tags: [JPC_TAG], instagram_handle: null, tiktok_handle: null, youtube_handle: null, ...FINANCE_ZEROS }, true);
+  const created = await sbInsert("creators", { name: "External", type: "other", status: "archived", tags: [ROSTER_TAG], instagram_handle: null, tiktok_handle: null, youtube_handle: null, ...FINANCE_ZEROS }, true);
   if (!created[0]) throw new Error("Could not create External creator");
   return created[0].id;
 }
@@ -220,7 +227,7 @@ export async function addManualOutlier(input: Record<string, any>): Promise<Resu
     const resolved = SHORT_LINK_RE.test(rawUrl) ? await resolveShortLink(rawUrl) : rawUrl;
     const parsed = parsePostUrl(resolved);
     if (!parsed) {
-      return { ok: false, error: "Couldn't read a post id from that URL. Paste the full post link (tiktok.com/@user/video/…, instagram.com/reel/…, youtube.com/watch…) — share links normally resolve automatically, but this one didn't." };
+      return { ok: false, error: "Couldn't read a post id from that URL. Paste the full post link (tiktok.com/@user/video/…, instagram.com/reel/…, youtube.com/watch…), share links normally resolve automatically, but this one didn't." };
     }
     const { platform, external_id, clean_url } = parsed;
 

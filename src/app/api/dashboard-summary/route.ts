@@ -1,29 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireSession, getBackendToken, backendBaseFor } from "@/lib/auth";
-import { fetchSnapshots, countRows, expenseStats, appState } from "@/lib/supabaseRest";
+import { requireSession, backendBaseFor } from "@/lib/auth";
+import { fetchSnapshots, fetchRosterStats, fetchCreatorsUniverse } from "@/lib/supabaseRest";
 import { getRcOverview } from "@/lib/rc";
 
-/**
- * Home Dashboard headline metrics (Adam's spec):
- * - totalRevenue: ALL-TIME GROSS (Σ daily snapshot revenue) — not estimated
- * - totalDownloads: Σ new_customers across snapshots
- * - totalUsers: registered accounts from the NestJS backend (caller's token
- *   forwarded — same backend the dashboard deployment targets)
- * - onboarding completion = users / downloads (computed client-side)
- * - freeCodesSent, activeSubscriptions (RC), cashRemaining
- * - appRating: Just Pray's App Store rating + review count, summed across
- *   the major storefronts (a single-country lookup vastly undercounts)
- */
+/** Home period flows plus closing subscriptions. Views are the latest counted
+ * views on roster creators' posts published in the selected period. Rating has
+ * no reliable daily history, so it is always current. */
 
-const JP_APP_ID = "6747154163";
+/** Your App Store app id (the number in the App Store URL). */
+const APPLE_APP_ID = process.env.APPLE_APP_ID || "";
 const STOREFRONTS = ["us", "gb", "ca", "au", "fr", "de", "nl", "se", "sa", "ae", "eg", "kw", "qa", "tr", "id", "my", "sg", "pk", "in", "bd", "ma", "dz", "ng", "za"];
 
 async function getAppRating(): Promise<{ rating: number | null; reviews: number }> {
+  if (!APPLE_APP_ID) return { rating: null, reviews: 0 };
   try {
     const results = await Promise.all(
       STOREFRONTS.map(async (c) => {
         try {
-          const r = await fetch(`https://itunes.apple.com/lookup?id=${JP_APP_ID}&country=${c}`, {
+          const r = await fetch(`https://itunes.apple.com/lookup?id=${APPLE_APP_ID}&country=${c}`, {
             signal: AbortSignal.timeout(6000),
             cache: "no-store",
           });
@@ -50,12 +44,24 @@ async function getAppRating(): Promise<{ rating: number | null; reviews: number 
   }
 }
 
-async function getTotalUsers(req: NextRequest): Promise<number | null> {
+/**
+ * Total users, fetched as the SIGNED-IN admin rather than with the stored
+ * master credential.
+ *
+ * Two reasons. It respects their permissions — someone without `users:read`
+ * gets null and the tile simply shows nothing, instead of a number the API
+ * would refuse them. And it removes a dependency on the shared credential in
+ * the environment, which silently breaks this whole page whenever that
+ * password is rotated on the backend.
+ */
+async function getTotalUsers(req: NextRequest, token: string, from?: string, to?: string): Promise<number | null> {
   try {
     const host = req.headers.get("host") || "";
-    const token = await getBackendToken(host); // server-minted master token
     if (!token) return null;
-    const res = await fetch(`${backendBaseFor(host)}/admin/users?page=1&limit=1`, {
+    const params = new URLSearchParams({ page: "1", limit: "1" });
+    if (from) params.set("createdAtStart", `${from}T00:00:00.000Z`);
+    if (to) params.set("createdAtEnd", `${to}T23:59:59.999Z`);
+    const res = await fetch(`${backendBaseFor(host)}/admin/users?${params}`, {
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",
     });
@@ -71,32 +77,45 @@ export async function GET(req: NextRequest) {
   const guard = await requireSession(req, "dashboard");
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
+  const from = req.nextUrl.searchParams.get("from") || undefined;
+  const requestedTo = req.nextUrl.searchParams.get("to") || undefined;
+  const validDay = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
+  if (!!from !== !!requestedTo || (from && requestedTo && (!validDay(from) || !validDay(requestedTo) || from > requestedTo))) return NextResponse.json({ error: "Choose a valid date range." }, { status: 400 });
+  const today = new Date().toISOString().slice(0, 10);
+  const to = requestedTo && requestedTo < today ? requestedTo : today;
+  const historical = to < today;
   try {
-    const [snapshots, freeCodesSent, rc, rating, totalUsers, incomeStats, costStats, startingCapitalRaw] = await Promise.all([
-      fetchSnapshots(null, null),
-      countRows(["code_sent=eq.true"]),
-      getRcOverview(),
+    const [snapshots, rc, rating, totalUsers, views] = await Promise.all([
+      fetchSnapshots(null, to),
+      historical ? Promise.resolve(null) : getRcOverview(),
       getAppRating(),
-      getTotalUsers(req),
-      expenseStats({ category: "Income", excludeIncome: false }),
-      expenseStats({ excludeIncome: true }),
-      appState("starting_capital"),
+      getTotalUsers(req, guard.session.backendToken, from, from ? to : undefined),
+      Promise.all([
+        fetchRosterStats(`${from || "2000-01-01"}T00:00:00.000Z`, `${to}T23:59:59.999Z`),
+        fetchCreatorsUniverse(),
+      ]).then(([stats, creators]) => {
+        const tagged = new Set(creators.filter(c => (c.tags || []).includes("roster")).map(c => c.id));
+        const ids = new Set(creators.filter(c => tagged.has(c.id) || tagged.has(c.parent_id)).map(c => c.id));
+        // Each account appears once; personas must not double-count child posts.
+        return stats.filter(row => ids.has(row.creator_id)).reduce((sum, row) => sum + (Number(row.counted_views) || 0), 0);
+      }).catch(() => null),
     ]);
-
-    const totalRevenue = snapshots.reduce((s, x) => s + (Number(x.revenue) || 0), 0);
-    const totalDownloads = snapshots.reduce((s, x) => s + (Number(x.new_customers) || 0), 0);
-    const startingCapital = typeof startingCapitalRaw === "number" ? startingCapitalRaw : 20000;
+    const period = snapshots.filter(row => !from || row.snapshot_date >= from);
+    const totalRevenue = period.reduce((sum, row) => sum + (Number(row.revenue) || 0), 0);
+    const totalDownloads = period.reduce((sum, row) => sum + (Number(row.new_customers) || 0), 0);
+    const last = snapshots.at(-1);
+    const activeSubscriptions = historical ? last?.active_subscriptions ?? null : rc?.overview.active_subscriptions ?? null;
 
     return NextResponse.json({
       totalRevenue,
       totalDownloads,
       totalUsers,
-      freeCodesSent,
-      activeSubscriptions: rc.overview.active_subscriptions,
-      cashRemaining: startingCapital + incomeStats.total - costStats.total,
+      views,
+      activeSubscriptions,
+      subscriptionsDate: historical ? last?.snapshot_date ?? null : null,
       appRating: rating.rating,
       appReviews: rating.reviews,
-      rcOk: rc.ok,
+      rcOk: rc?.ok ?? !!last,
       latestSnapshotDate: snapshots.length ? snapshots[snapshots.length - 1].snapshot_date : null,
     });
   } catch (err) {

@@ -4,6 +4,8 @@ import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Loader2, Search, Eye, Star, Trophy, Layers } from "lucide-react";
 import PageHeader from "@/components/ui/PageHeader";
+import Tabs from "@/components/ui/Tabs";
+import Outliers from "@/views/Outliers";
 import Empty from "@/components/ui/Empty";
 import { cn } from "@/lib/utils";
 import { slugForCreator, type CreatorType } from "@/lib/creators";
@@ -14,6 +16,7 @@ import { PlatformBadge } from "@/components/creators/PlatformBadge";
 import { PostActions } from "@/components/creators/PostActions";
 import { CreatorAvatar } from "@/components/creators/CreatorAvatar";
 import { ExpandableCaption, thumbUrl, fmtCompact, fmtRelative } from "@/components/creators/PostBits";
+import { creatorApi, useCreatorSection } from "@/lib/creatorMarketClient";
 
 interface FeedPost {
   id: string; platform: "instagram" | "tiktok" | "youtube"; url: string; thumbnail_url: string | null;
@@ -26,9 +29,12 @@ const authHeaders = (): Record<string, string> => {
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
-const inputCls = "rounded-lg border border-white/[0.08] bg-jp-navy-card/50 px-2.5 py-1.5 text-xs text-ink placeholder:text-ink-faint focus:border-jp-blue/45 focus:outline-none";
+const inputCls = "rounded-lg border border-white/[0.08] bg-app-navy-card/50 px-2.5 py-1.5 text-xs text-ink placeholder:text-ink-faint focus:border-app-blue/45 focus:outline-none";
 
-export default function Posts() {
+type PostsView = "posts" | "outliers";
+
+export default function Posts({ initialView = "posts" }: { initialView?: PostsView } = {}) {
+  const [view, setView] = useState<PostsView>(initialView);
   const [feed, setFeed] = useState<FeedPost[]>([]);
   const [topTen, setTopTen] = useState<FeedPost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,7 +55,7 @@ export default function Posts() {
       const { fromISO, toISO } = resolveTimeframe(tf);
       const p = new URLSearchParams({ platform, state, sort, from: fromISO, to: toISO });
       if (debounced) p.set("search", debounced);
-      const res = await fetch(`/api/creators/posts?${p}`, { headers: authHeaders() });
+      const res = await fetch(creatorApi(`/api/creators/posts?${p}`), { headers: authHeaders() });
       if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || `Failed (${res.status})`); }
       const d = await res.json();
       setFeed(d.feed);
@@ -65,6 +71,28 @@ export default function Posts() {
 
   const tfLabel = resolveTimeframe(tf).label;
 
+  const viewTabs = (
+    <Tabs
+      tabs={[{ key: "posts", label: "All posts" }, { key: "outliers", label: "Outliers" }]}
+      active={view}
+      onChange={(key) => {
+        setView(key as PostsView);
+        // Keep the tab in the URL so old Outliers links and refreshes land here.
+        window.history.replaceState(null, "", key === "outliers" ? "?view=outliers" : window.location.pathname);
+      }}
+    />
+  );
+
+  if (view === "outliers") {
+    return (
+      <div className="space-y-4">
+        <PageHeader title="Posts" subtitle="Starred top performers, ready to archive and publish" />
+        {viewTabs}
+        <Outliers embedded />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <PageHeader
@@ -72,6 +100,7 @@ export default function Posts() {
         subtitle={`${feed.length} post${feed.length === 1 ? "" : "s"} matching · ${tfLabel.toLowerCase()} · ${topTen.length} in top 10`}
         actions={<TimeframeFilter value={tf} onChange={setTf} />}
       />
+      {viewTabs}
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
@@ -99,7 +128,7 @@ export default function Posts() {
         </select>
       </div>
 
-      {error && <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-300">{error}</div>}
+      {error && <div className="rounded-lg border border-app-red/30 bg-app-red/10 px-4 py-2.5 text-sm text-app-red-text">{error}</div>}
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         {/* MAIN FEED */}
@@ -109,7 +138,7 @@ export default function Posts() {
           ) : feed.length === 0 ? (
             <Empty title="No posts to show" description="Try a different search, filter, or timeframe." icon={<Layers className="h-5 w-5" />} />
           ) : (
-            <div className={cn("overflow-hidden rounded-xl border border-white/[0.06] bg-jp-navy-card/40", loading && "opacity-60")}>
+            <div className={cn("overflow-hidden rounded-xl border border-white/[0.06] bg-app-navy-card/40", loading && "opacity-60")}>
               <ul className="divide-y divide-white/[0.06]">
                 {feed.map((p) => <FeedRow key={p.id} p={p} />)}
               </ul>
@@ -119,14 +148,14 @@ export default function Posts() {
 
         {/* TOP 10 SIDEBAR */}
         <aside>
-          <div className="rounded-xl border border-white/[0.06] bg-jp-navy-card/40 p-4">
+          <div className="rounded-xl border border-white/[0.06] bg-app-navy-card/40 p-4">
             <div className="flex items-center gap-2 border-b border-white/[0.06] pb-3">
-              <Trophy className="h-4 w-4 text-jp-gold" />
-              <h2 className="text-[11px] font-semibold uppercase tracking-wider text-jp-gold">Top 10 by views</h2>
+              <Trophy className="h-4 w-4 text-app-gold" />
+              <h2 className="text-[11px] font-semibold uppercase tracking-wider text-app-gold">Top 10 by views</h2>
               <span className="ml-auto text-[10px] uppercase tracking-wider text-ink-faint">Counted · all time</span>
             </div>
             {topTen.length === 0 ? (
-              <p className="mt-3 text-xs text-ink-muted">No counted posts yet — approve some influencer/YouTuber posts to populate this.</p>
+              <p className="mt-3 text-xs text-ink-muted">No counted posts yet, approve some influencer/YouTuber posts to populate this.</p>
             ) : (
               <ol className="mt-2 space-y-2">
                 {topTen.map((p, i) => <li key={p.id}><TopTenRow rank={i + 1} p={p} /></li>)}
@@ -141,6 +170,7 @@ export default function Posts() {
 
 /** Wide feed row — thumb, platform badge, creator chip, caption, actions. */
 function FeedRow({ p }: { p: FeedPost }) {
+  const { base: creatorsBase } = useCreatorSection();
   const isInfluencer = p.creator.type === "influencer" || p.creator.type === "youtuber";
   const counted = isInfluencer ? p.approved && !p.excluded : !p.excluded;
   const t = thumbUrl(p);
@@ -151,18 +181,18 @@ function FeedRow({ p }: { p: FeedPost }) {
         <span className="sr-only">Open post on {p.platform}</span>
       </a>
 
-      <div className="pointer-events-none relative z-[1] h-24 w-16 flex-shrink-0 overflow-hidden rounded-lg bg-jp-navy-light/40 ring-1 ring-white/[0.06]">
+      <div className="pointer-events-none relative z-[1] h-24 w-16 flex-shrink-0 overflow-hidden rounded-lg bg-app-navy-light/40 ring-1 ring-white/[0.06]">
         {t ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={t} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" loading="lazy" decoding="async" />
         ) : null}
         {p.is_outlier && (
-          <div className="absolute left-1 top-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-jp-gold/90 text-jp-navy">
+          <div className="absolute left-1 top-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-app-gold/90 text-app-navy">
             <Star className="h-2.5 w-2.5 fill-current" />
           </div>
         )}
         {!counted && (
-          <div className="absolute inset-0 flex items-center justify-center bg-jp-navy/80 text-[9px] uppercase tracking-wider text-ink-faint">
+          <div className="absolute inset-0 flex items-center justify-center bg-app-navy/80 text-[9px] uppercase tracking-wider text-ink-faint">
             {p.excluded ? "Excl" : ""}
           </div>
         )}
@@ -171,7 +201,7 @@ function FeedRow({ p }: { p: FeedPost }) {
       <div className="pointer-events-none relative z-[1] min-w-0 flex-1">
         <div className="pointer-events-auto flex flex-wrap items-center gap-2">
           <PlatformBadge platform={p.platform} size="sm" url={p.url} creatorType={p.creator.type} />
-          <Link href={`/creators/${slugForCreator(p.creator)}`} className="inline-flex items-center gap-1.5 rounded-full px-1.5 py-0.5 text-xs text-ink-muted transition-colors hover:bg-white/[0.06] hover:text-ink">
+          <Link href={`${creatorsBase}/${slugForCreator(p.creator)}`} className="inline-flex items-center gap-1.5 rounded-full px-1.5 py-0.5 text-xs text-ink-muted transition-colors hover:bg-white/[0.06] hover:text-ink">
             <CreatorAvatar name={p.creator.name} src={p.creator.profile_image_url} size="xs" />
             {p.creator.name}
           </Link>
@@ -206,20 +236,20 @@ function FeedRow({ p }: { p: FeedPost }) {
 function TopTenRow({ rank, p }: { rank: number; p: FeedPost }) {
   const t = thumbUrl(p);
   const rankColor =
-    rank === 1 ? "bg-jp-gold/90 text-jp-navy"
-    : rank === 2 ? "bg-zinc-300/80 text-jp-navy"
-    : rank === 3 ? "bg-amber-700/80 text-white"
+    rank === 1 ? "bg-app-gold/90 text-app-navy"
+    : rank === 2 ? "bg-zinc-300/80 text-app-navy"
+    : rank === 3 ? "bg-app-orange/80 text-white"
     : "bg-white/[0.05] text-ink-muted";
   return (
     <a href={p.url} target="_blank" rel="noopener noreferrer" className="flex gap-2.5 rounded-lg p-1.5 transition-colors hover:bg-white/[0.04]">
       <div className={cn("num flex h-5 w-5 flex-shrink-0 items-center justify-center self-start rounded-full text-[10px] font-bold", rankColor)}>{rank}</div>
-      <div className="relative h-16 w-12 flex-shrink-0 overflow-hidden rounded-md bg-jp-navy-light/40 ring-1 ring-white/[0.08]">
+      <div className="relative h-16 w-12 flex-shrink-0 overflow-hidden rounded-md bg-app-navy-light/40 ring-1 ring-white/[0.08]">
         {t ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={t} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" loading="lazy" decoding="async" />
         ) : null}
         {p.is_outlier && (
-          <div className="absolute right-0.5 top-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-jp-gold/90 text-jp-navy">
+          <div className="absolute right-0.5 top-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-app-gold/90 text-app-navy">
             <Star className="h-2 w-2 fill-current" />
           </div>
         )}
@@ -229,7 +259,7 @@ function TopTenRow({ rank, p }: { rank: number; p: FeedPost }) {
           <PlatformBadge platform={p.platform} size="sm" url={p.url} creatorType={p.creator.type} />
           <span className="truncate">{p.creator.name}</span>
         </div>
-        <div className="num mt-0.5 text-sm font-semibold text-jp-blue-light">{fmtCompact(p.view_count)}</div>
+        <div className="num mt-0.5 text-sm font-semibold text-app-blue-light">{fmtCompact(p.view_count)}</div>
         <p className="line-clamp-1 text-[11px] text-ink-muted">{p.caption ?? "(no caption)"}</p>
       </div>
     </a>

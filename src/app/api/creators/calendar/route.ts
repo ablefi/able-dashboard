@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth";
-import { fetchLeafCreators, fetchCalendarPosts } from "@/lib/supabaseRest";
+import { requireCreatorsSession, marketCreatorIds } from "@/lib/creatorMarket";
+import { fetchLeafCreators, fetchCalendarPosts, fetchSnapshots } from "@/lib/supabaseRest";
 import { postCounts, slugForCreator, type Creator, type CreatorType } from "@/lib/creators";
 
 /**
  * Content-calendar heatmap for Creators › Calendar. For a given month
  * returns, per day, the set of creators who shipped a counted post —
- * deduped per creator per day. Mirrors jp-creators' calendar page.
+ * deduped per creator per day. Mirrors roster' calendar page.
  * Gated by `creators`.
  */
 export const maxDuration = 60;
@@ -28,8 +29,9 @@ function monthBounds(monthStr: string) {
 }
 
 export async function GET(req: NextRequest) {
-  const guard = await requireSession(req, "creators");
+  const guard = await requireCreatorsSession(req);
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
+  const market = guard.market;
 
   try {
     const { searchParams } = new URL(req.url);
@@ -38,7 +40,10 @@ export async function GET(req: NextRequest) {
     const month = /^\d{4}-\d{2}$/.test(searchParams.get("month") || "") ? searchParams.get("month")! : fallback;
     const bounds = monthBounds(month);
 
-    const creators = (await fetchLeafCreators()) as Creator[];
+    const [creatorRows,snapshots]=await Promise.all([fetchLeafCreators(),fetchSnapshots(bounds.startISO.slice(0,10),new Date(new Date(bounds.endISO).getTime()-86400000).toISOString().slice(0,10)).catch(()=>null)]);
+    const traction=snapshots?Object.fromEntries(snapshots.map(s=>[s.snapshot_date,{downloads:s.new_customers==null?null:Number(s.new_customers),conversions:s.new_paid_subs==null?null:Number(s.new_paid_subs)}])):{};
+    const inMarket = await marketCreatorIds(market);
+    const creators = (creatorRows as Creator[]).filter((c) => inMarket.has(c.id));
     const byId = new Map(creators.map((c) => [c.id, c]));
     const posts = await fetchCalendarPosts(creators.map((c) => c.id), bounds.startISO, bounds.endISO);
 
@@ -62,7 +67,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ month, label: bounds.label, prev: bounds.prev, next: bounds.next, totalPosts, totalCreators: uniqueCreators.size, days });
+    return NextResponse.json({ month, label: bounds.label, prev: bounds.prev, next: bounds.next, totalPosts, totalCreators: uniqueCreators.size, days, traction, tractionUnavailable:snapshots===null });
   } catch (err) {
     console.error("Calendar API error:", err);
     return NextResponse.json({ error: "Failed to load calendar", details: String(err) }, { status: 500 });

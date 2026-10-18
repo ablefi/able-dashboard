@@ -1,137 +1,76 @@
 # Able Dashboard
 
-Marketing operations dashboard for Able: creator roster, post tracking, content
-performance, referral codes, user analysis and website analytics.
+Able's internal admin dashboard: creator (influencer) tracking, growth analytics, competitors, and, once Able's backend has admin endpoints, users and referral codes. Next.js 16 (App Router), React 19, Tailwind v4, Recharts.
 
-## Dashboard presentation
+Built on the admin dashboard template (the JustPray dashboard with its branding removed): dark navy surfaces, a blue accent, three navigation styles and a ⌘K command palette. All app-specific details live in environment variables and in `src/lib/brand.ts`. Nothing secret is in the code.
 
-White surfaces and black primary controls use Able's orange as a small brand accent.
-The floating bottom navigation keeps the content full-width: Overview, Creators,
-Users, Codes, Finances, Growth, and More. Hover to view a section's pages, click its
-tab to open the default page, or use the keyboard disclosure button to open its menu.
-On touch screens, tap the section to choose a page. Website, Competitors and Prospects
-are grouped under Growth; revenue is under Finances. Existing URLs and creator
-profiles, forms, scraping, and data sources are unchanged.
+## Pages
 
-This project is separate from the static product Ops dashboard in `ablefi/able`.
-Its auth/data setup below still applies; no Ops viewer password or browser-only
-creator drafts are added here.
+| Section | Pages | Data |
+|---|---|---|
+| Dashboard | Home: creator views, plus revenue, downloads, subscriptions and App Store rating when their sources are configured, and a user globe for admins with `users:read` | Supabase, RevenueCat (optional), iTunes lookup |
+| Creators | Prospects, Creators roster (with personas), creator detail, Attribution review, Posts (incl. Outliers), Calendar, Performance | Supabase, ScrapeCreators |
+| Growth | Website Analytics, Competitors (App Store category rankings), App Store Reviews | Supabase, iTunes RSS |
+| Users | Users, User Analysis | Able backend |
+| Referral Codes | Codes, Code Analytics | Able backend |
+| Admin Settings | Admin accounts and permissions (from the command palette) | Able backend |
 
-This is a stripped fork of a working dashboard built for another app. All of
-that app's product features, data and credentials have been removed. What
-remains is the marketing machinery, which is the part that transfers.
+Navigation comes in four styles (sidebar, rail, top bar, bottom bar), plus a ⌘K command palette and a theme/presentation picker.
 
-**There is no login.** Every page is reachable by anyone who can reach the
-deployment. If access control is wanted, the simplest route is Vercel's
-built-in password protection on the project. Nothing in the app needs to change
-for that.
+## Sign-in
 
----
+Two modes, chosen by environment:
 
-## Stack
+- **Shared password (current).** Set `DASHBOARD_PASSWORD` (and optionally `DASHBOARD_ALLOWED_EMAILS`). The login form checks it on the dashboard's server and never calls the backend. Sessions get a fixed permission list (`LOCAL_PERMISSIONS` in `src/lib/auth.ts`): Home, Creators, Website Analytics, Prospects and Competitors. Users, Referral Codes, Admins and App Store Reviews stay hidden.
+- **Backend admin accounts.** Remove `DASHBOARD_PASSWORD` and the form forwards to `POST /admin/login` on Able's backend, which returns each admin's own token and permission keys. Shared-password sessions stop working as soon as the variable is removed.
 
-- Next.js 16 (App Router), React 19, Tailwind v4, Recharts
-- Supabase over PostgREST for the dashboard's own tables (server-side only,
-  service-role key)
-- Able's backend for user and revenue data (not yet wired up)
-- ScrapeCreators for pulling creator posts
-- Deployed on Vercel
+Either way the session is a signed httpOnly cookie (`DASHBOARD_SESSION_SECRET`), and every API route checks it with `requireSession`.
 
-## Getting it running
+## Architecture
+
+- **Able's backend** owns users, referral codes and admin accounts. These endpoints do not exist yet; the backend sections stay hidden until they do. The browser calls the backend directly with the admin's token:
+  - `POST /admin/login` → `{ access_token, admin: { id, email, isSuperAdmin, permissions[] } }`
+  - `GET /admin/users` (paged, `?page&limit&...filters`), `GET /admin/users/:id`, `GET /admin/users/:id/access`, `PATCH /admin/users/:id/toggle-status`, `DELETE /admin/users/:id`, `DELETE /admin/users/:id/permanent`, `POST /admin/users/:id/restore`
+  - `GET/POST/PATCH/DELETE /admin/referral-codes[/:id]`, `POST /admin/referral-codes/:id/activate|deactivate|recover`, `GET /admin/referral-codes[/:id]/revenue-analytics`
+  - `GET/POST/PATCH/DELETE /admin/admins[/:id]`, `POST /admin/admins/:id/set-password`, `POST /admin/admins/me/change-password`, `GET/POST/DELETE /admin/permissions[/:id]`
+  - Paged responses look like `{ data: [...], meta: { total, page, limit, totalPages } }`.
+- **Supabase** holds the dashboard's own data: creators, posts, view snapshots, daily revenue snapshots, competitors, a key/value `app_state` store, and website page views. Schema: [`supabase/schema.sql`](supabase/schema.sql). Only the dashboard's server routes (`src/app/api/*`) touch it, with the service-role key.
+- **Integrations:** ScrapeCreators (creators' posts and view counts), iTunes RSS and lookup (Competitors rankings, App Store rating), RevenueCat (optional; Able does not currently use it).
+
+### Permissions
+
+Each admin has a list of permission keys (`users:read`, `creators:write`, …). `src/lib/permissions.ts` maps dashboard sections to keys, `src/lib/sections.ts` maps paths to sections, and `src/lib/nav.ts` hides anything an admin can't open. API routes enforce the same keys with `requireSession(req, ...)` in `src/lib/auth.ts`.
+
+### Scheduled jobs (`vercel.json`)
+
+- `/api/cron/refresh-all`: re-scrape creator posts every 8h. Authenticates with `CRON_SECRET`.
+
+The template's attribution crons (`/api/cron/attribution`, `/api/cron/attribution-review`) read signup answers from the backend's `/admin/users`, so they are not scheduled yet. Add them back to `vercel.json` once those endpoints exist.
+
+### Creator post auto-approval
+
+A scraped post counts as sponsored work when its caption @mentions one of `BRAND_HANDLES` (default `able`, `ablefinance`, `able.finance`), uses the TikTok display-name form of `BRAND_DISPLAY_NAME` ("@Able Finance"), or links to `BRAND_LINK_DOMAINS` (`able.finance`). See `src/lib/scrape.ts`. Only approved, non-excluded posts count towards a creator's views.
+
+### Competitors
+
+Competitor apps live in the `competitors` table. Refresh Rankings checks each app's position in the Top Free Finance chart across about 50 storefronts and caches the result in `app_state.competitor_rankings`. Set `APPLE_APP_ID` once Able is on the App Store to pin Able to the top of the table.
+
+### App Store Reviews
+
+The Reviews page reads a queue from `app_state`; the sync itself is done by a worker outside this repo that holds the App Store Connect key. It is hidden in shared-password mode and has nothing to show until Able is on the App Store.
+
+## Setup
 
 1. `npm install`
-2. Copy `.env.example` to `.env.local` and fill it in
-3. Create the Supabase tables (below)
-4. `npm run dev`
+2. Copy `.env.example` to `.env.local` and fill it in.
+3. Create the Supabase tables: run `supabase/schema.sql` in the SQL editor.
+4. `npm run dev` (port 3011), then sign in.
 
-Nothing is pre-configured. The app boots with every environment variable blank
-and renders empty pages rather than crashing, so you can wire it up one piece
-at a time.
+Deploying: on Vercel, set the same environment variables. Crons only run on production deployments.
 
----
+## Customising
 
-## What you need to create
-
-### 1. A new Supabase project
-
-The dashboard owns its own marketing tables. These are not Able's product data,
-they are the record of what creators posted and what it did. The code expects
-these tables to exist:
-
-| Table | What it holds |
-|---|---|
-| `creators` | The roster. One row per creator or persona, with their deal terms, rate, platform and handles |
-| `posts` | Every post scraped from every creator's feed. `approved` marks the ones that count as sponsored work; `excluded` marks ones never to count |
-| `view_snapshots` | Point-in-time view counts per post, so growth is measured over time rather than bucketed to the post date |
-| `own_posts` | Posts from our own brand accounts |
-| `competitors` | Competitor accounts being tracked |
-| `page_views` | Website analytics |
-| `revenue_snapshots` | Revenue over time |
-| `expenses` | Spend records |
-| `app_state` | Key/value config and cached state (`sc_credits`, `rc_auth_cookie`, `starting_capital`) |
-
-Column shapes are inferred from `src/lib/supabaseRest.ts` and the views that
-consume them. Start there when creating the schema.
-
-### 2. Backend endpoints
-
-Users, user analysis, referral codes and content read from Able's backend, not
-from Supabase. The original called a NestJS backend under `/admin/*` and
-authenticated by posting to `/admin/login` with a service credential.
-
-Whoever owns Able's backend needs to either expose equivalent endpoints or
-change the calls in `src/api/`. Until then, those pages render empty. Every
-other page works without the backend.
-
-### 3. A ScrapeCreators key
-
-On Able's own account and billing. `/api/cron/refresh-all` runs every 8 hours
-and re-scrapes every creator's feed.
-
----
-
-## How the creator tracking works
-
-This is the core of the dashboard and the part worth understanding.
-
-1. Each creator in `creators` has their platform handles recorded.
-2. The cron scrapes each creator's **entire** feed into `posts`, not just their
-   sponsored work.
-3. A post is auto-approved as sponsored work when the caption contains a real
-   `@mention` of one of our accounts. The handles and matching rules live in
-   **`src/lib/brand.ts`** and should be set to Able's real handles before the
-   first scrape.
-4. Anything not auto-approved can be approved by hand in the UI. `excluded`
-   permanently removes a post from counting.
-5. `view_snapshots` records view counts over time, so a video that spikes three
-   days after posting is measured correctly rather than being attributed to its
-   post date.
-6. Performance views then compute counted views, cost, and cost per thousand
-   views per creator.
-
-The distinction that matters: **counted views, not whole-channel views.** A
-creator with a 40M-view channel may have delivered 50k views of actual
-sponsored work. Only approved posts count.
-
----
-
-## Layout
-
-```
-src/app/(authed)/   pages, one folder per route
-src/app/api/        server routes (Supabase and backend access)
-src/views/          the large page components
-src/components/     shared UI
-src/lib/            server logic: supabaseRest, scrape, brand, auth
-src/api/            client-side backend calls
-```
-
-## Notes
-
-- `src/lib/auth.ts` is a no-op shim. `requireSession` always allows. It exists
-  so the API routes keep their original shape and so a real session can be
-  reinstated later without touching every route.
-- Tailwind theme tokens are still named `jp-*` in `globals.css`. They are just
-  class names and can be renamed whenever the design is revisited.
-- The `NEXT_PUBLIC_ENV` variable controls the staging banner. Set it to
-  `production` to hide it.
+- **Name and logo:** `NEXT_PUBLIC_APP_NAME`, and the icons in `public/` (generated from Able's app icon).
+- **Colours:** `src/app/globals.css` (`--color-app-*` tokens) and the theme presets in `src/lib/theme.ts`.
+- **User fields:** `src/api/usersApi.ts` (types), `src/views/Users.tsx` (columns, filters, CSV), `src/components/users/UserSettingsDrawer.tsx` (drawer), and `src/lib/userAnalysis.ts` with `src/views/UserAnalysis.tsx` (charts).
+- **Second creator market (optional):** creators tagged `market:alt` form a separate section. See `src/lib/creatorMarket.ts`.

@@ -29,7 +29,7 @@ function parseAudience(raw: unknown): AudienceRow[] {
 
 const PALETTE = ["#60a5fa", "#4fb8e8", "#34d399", "#a78bfa", "#fbbf24", "#f87171", "#e879f9", "#fb923c", "#22d3ee", "#a3e635", "#f472b6", "#94a3b8"];
 
-/** Pie + country leaderboard. Ported from jp-creators. */
+/** Pie + country leaderboard. Ported from roster. */
 export function AudienceCountriesChart({ raw }: { raw: unknown }) {
   const rows = parseAudience(raw);
   if (rows.length === 0) return null;

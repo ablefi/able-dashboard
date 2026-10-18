@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useUsersApi } from "@/api/usersApi";
 import { useAuth } from "@/context/AuthContext";
+import { hasPermission } from "@/lib/permissions";
 import { isAnalysisStale, startAnalysisRun, runner, type FetchUsersFn } from "@/lib/userAnalysisRunner";
 
 /**
@@ -32,8 +33,8 @@ export default function UserAnalysisAutoRefresh() {
 
   useEffect(() => {
     if (attemptedThisLoad) return;
-    // Needs the users section — otherwise every /admin/users call 401s.
-    if (!user || !(user.isOwner || user.sections?.includes("users"))) return;
+    // Needs users:read — otherwise every /admin/users call 403s.
+    if (!hasPermission(user, "users:read")) return;
     if (runner.running || !isAnalysisStale()) return;
 
     attemptedThisLoad = true;

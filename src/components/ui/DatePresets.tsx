@@ -38,7 +38,7 @@ const PRESETS: { key: string; label: string }[] = [
 ];
 
 const inputCls =
-  "rounded-lg border border-white/[0.08] bg-jp-navy-light/60 px-2 py-1.5 text-xs text-ink focus:border-jp-blue/45 focus:outline-none";
+  "rounded-lg border border-white/[0.08] bg-app-navy-light/60 px-2 py-1.5 text-xs text-ink focus:border-app-blue/45 focus:outline-none";
 
 /** Preset pills + custom from/to date inputs. */
 export default function DatePresets({ value, onChange }: { value: DateRange; onChange: (r: DateRange) => void }) {

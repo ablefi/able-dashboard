@@ -1,7 +1,8 @@
 "use client";
 
 import axios from "axios";
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
+import { useAuth } from "../context/AuthContext";
 import { getApiBaseUrl } from "@/lib/apiBase";
 
 /**
@@ -16,10 +17,14 @@ import { getApiBaseUrl } from "@/lib/apiBase";
  * effect fires.
  *
  * The request interceptor reads the token from localStorage at REQUEST time
- * (always current). This build has no login, so a 401 re-mints the backend
- * token once and retries rather than logging anyone out.
+ * (always current), and the 401 handler calls the latest logout via a ref —
+ * so there's no stale-closure / effect-ordering race anywhere.
  */
 export const useAxios = () => {
+  const { logout } = useAuth();
+  const logoutRef = useRef(logout);
+  logoutRef.current = logout;
+
   const instance = useMemo(() => {
     const inst = axios.create({ baseURL: getApiBaseUrl() });
 
@@ -47,23 +52,28 @@ export const useAxios = () => {
         // session is no longer valid.
         if (error.response?.status === 401 && original && !original._retried) {
           original._retried = true;
-          // A 401 from the backend means the browser's backend token lapsed.
-          // This dashboard has no login, so re-mint the token and retry once.
           try {
-            const res = await fetch("/api/auth/token", { cache: "no-store" });
-            if (res.ok) {
-              const d = await res.json();
-              if (d.backendToken) {
-                localStorage.setItem("token", d.backendToken);
-                original.headers = original.headers || {};
-                original.headers["Authorization"] = `Bearer ${d.backendToken}`;
-                return inst(original);
+            const me = await fetch("/api/auth/me", { cache: "no-store" });
+            if (me.ok) {
+              const d = await me.json();
+              if (d.authenticated) {
+                if (d.backendToken) {
+                  localStorage.setItem("token", d.backendToken);
+                  original.headers = original.headers || {};
+                  original.headers["Authorization"] = `Bearer ${d.backendToken}`;
+                  return inst(original); // retry once with the fresh token
+                }
+                // Valid session, just no backend token for this role — don't
+                // nuke the session; let the caller see the error.
+                return Promise.reject(error);
               }
             }
           } catch {
-            /* backend not configured — surface the original error */
+            /* network/parse issue — fall through to logout */
           }
-          return Promise.reject(error);
+          // Session really is gone (cookie expired / signed out elsewhere).
+          logoutRef.current?.();
+          if (typeof window !== "undefined") window.location.href = "/login";
         }
         return Promise.reject(error);
       }

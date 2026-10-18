@@ -12,12 +12,14 @@ import { readCache, writeCache } from "@/lib/swrCache";
 import { resolveTimeframe } from "@/lib/timeframe";
 import { TimeframeFilter } from "@/components/creators/TimeframeFilter";
 import { useCreatorTimeframe } from "@/components/creators/useCreatorTimeframe";
+import { useAttribution } from "@/components/creators/attribution";
+import { creatorApi } from "@/lib/creatorMarketClient";
 
-const CHART = { grid: "rgba(23,35,30,0.08)", tick: "#66756d" };
+const CHART = { grid: "rgba(255,255,255,0.05)", tick: "#8499b3" };
 const TOOLTIP_STYLE = {
-  contentStyle: { backgroundColor: "#ffffff", border: "1px solid #dce4df", borderRadius: "8px" },
-  labelStyle: { color: "#17231e" },
-  itemStyle: { color: "#17231e" },
+  contentStyle: { backgroundColor: "#15203a", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "8px" },
+  labelStyle: { color: "#f0f4f8" },
+  itemStyle: { color: "#f0f4f8" },
 };
 const PLATFORM_COLOR: Record<string, string> = { instagram: "#e1306c", tiktok: "#22d3ee", youtube: "#ef4444" };
 const PLATFORM_LABEL: Record<string, string> = { instagram: "Instagram", tiktok: "TikTok", youtube: "YouTube" };
@@ -28,19 +30,22 @@ const authHeaders = (): Record<string, string> => {
 };
 const fmtCompact = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n));
 
-const inputCls = "rounded-lg border border-white/[0.08] bg-jp-navy-card/50 px-2.5 py-1.5 text-xs text-ink placeholder:text-ink-faint focus:border-jp-blue/45 focus:outline-none";
+const inputCls = "rounded-lg border border-white/[0.08] bg-app-navy-card/50 px-2.5 py-1.5 text-xs text-ink placeholder:text-ink-faint focus:border-app-blue/45 focus:outline-none";
 
-function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+/** `accent` is kept in the signature so call sites don't all need editing,
+ *  but it no longer paints: counts are ink like everywhere else. */
+function Stat({ label, value, hint, title }: { label: string; value: string; accent?: boolean; hint?: string; title?: string }) {
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-jp-navy-card/40 px-4 py-3">
+    <div className="rounded-xl border border-white/[0.06] bg-app-navy-card/40 px-4 py-3" title={title}>
       <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">{label}</div>
-      <div className={cn("mt-1 text-2xl font-semibold num", accent ? "text-jp-blue-light" : "text-ink")}>{value}</div>
+      <div className="mt-1 text-2xl font-semibold num text-ink">{value}</div>
+      {hint && <div className="mt-0.5 text-[10px] leading-tight text-ink-faint">{hint}</div>}
     </div>
   );
 }
 
 function Card({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <div className={cn("rounded-xl border border-white/[0.06] bg-jp-navy-card/40 p-5", className)}>{children}</div>;
+  return <div className={cn("rounded-xl border border-white/[0.06] bg-app-navy-card/40 p-5", className)}>{children}</div>;
 }
 
 export default function Performance({ scope = "counted" }: { scope?: "counted" | "all" }) {
@@ -50,6 +55,8 @@ export default function Performance({ scope = "counted" }: { scope?: "counted" |
   const [platform, setPlatform] = useState("all");
   const [creatorType, setCreatorType] = useState("all");
   const [granularity, setGranularity] = useState<Granularity>("day");
+  const [boardSort, setBoardSort] = useState<"views" | "installs" | "revenue">("views");
+  const { data: attribution } = useAttribution();
   const [tf, setTf] = useCreatorTimeframe();
 
   const cacheKey = useMemo(
@@ -69,7 +76,7 @@ export default function Performance({ scope = "counted" }: { scope?: "counted" |
     try {
       const { fromISO, toISO } = resolveTimeframe(tf);
       const p = new URLSearchParams({ platform, creator_type: creatorType, granularity, from: fromISO, to: toISO, scope });
-      const res = await fetch(`/api/creators/performance?${p}`, { headers: authHeaders() });
+      const res = await fetch(creatorApi(`/api/creators/performance?${p}`), { headers: authHeaders() });
       if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || `Failed (${res.status})`); }
       const s = (await res.json()) as PerformanceStats;
       setStats(s);
@@ -87,14 +94,45 @@ export default function Performance({ scope = "counted" }: { scope?: "counted" |
   const tfLabel = resolveTimeframe(tf).label;
   const forUs = scope === "counted";
 
+  /**
+   * Installs per thousand views.
+   *
+   * Deliberately a feel-for-it number, not attribution: the installs are the
+   * app's total for the window from RevenueCat, so paid, organic and word of
+   * mouth are all in there. Narrowing the views by platform or creator type
+   * shrinks the denominator while installs stay whole, which inflates it — so
+   * that case is called out rather than quietly shown.
+   */
+  /**
+   * The leaderboard: view counts joined to onboarding attribution.
+   *
+   * Sorting by installs or revenue drops creators with none, because a table
+   * of zeroes ordered arbitrarily reads as a ranking when it is not one.
+   * Sorting by views keeps everybody, which is the old behaviour.
+   */
+  const board = useMemo(() => {
+    const byId = new Map((attribution?.creators ?? []).map((a) => [a.creatorId, a]));
+    const rows = (stats?.top_creators ?? []).map((c) => {
+      const a = byId.get(c.id);
+      return { ...c, installs: a?.downloads ?? 0, payers: a?.payers ?? 0, revenue: a?.revenue ?? 0 };
+    });
+    if (boardSort === "views") return rows.sort((x, y) => y.views - x.views);
+    if (boardSort === "installs") return rows.filter((r) => r.installs > 0).sort((x, y) => y.installs - x.installs || y.views - x.views);
+    return rows.filter((r) => r.revenue > 0).sort((x, y) => y.revenue - x.revenue || y.installs - x.installs);
+  }, [stats, attribution, boardSort]);
+
+  const filtered = platform !== "all" || creatorType !== "all";
+  const ipm =
+    stats?.installs == null || !stats.total_views ? null : (stats.installs / stats.total_views) * 1000;
+
   return (
     <div className="space-y-4">
       <PageHeader
         title={forUs ? "Performance" : "General Creative Performance"}
         subtitle={
           (forUs
-            ? "Our posts — counted (approved) posts only. "
-            : "GCP — every post they made, approved or not: the general baseline. ") +
+            ? "Our posts, counted (approved) posts only. "
+            : "GCP, every post they made, approved or not: the general baseline. ") +
           (stats ? `${platform === "all" ? "All platforms" : platform} · ${tfLabel.toLowerCase()} · ${granLabel.toLowerCase()} buckets` : "")
         }
         actions={<TimeframeFilter value={tf} onChange={setTf} />}
@@ -122,20 +160,31 @@ export default function Performance({ scope = "counted" }: { scope?: "counted" |
         />
       </div>
 
-      {error && <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-300">{error}</div>}
+      {error && <div className="rounded-lg border border-app-red/30 bg-app-red/10 px-4 py-2.5 text-sm text-app-red-text">{error}</div>}
 
       {loading && !stats ? (
         <div className="flex items-center justify-center py-20 text-ink-muted"><Loader2 className="mr-2 h-6 w-6 animate-spin" /> Loading performance…</div>
       ) : !stats ? null : (
         <div className={loading ? "space-y-4 opacity-60 transition-opacity" : "space-y-4 transition-opacity"}>
           {/* Stat row */}
-          <div className={cn("grid grid-cols-2 gap-3", stats.total_community_posts > 0 ? "md:grid-cols-6" : "md:grid-cols-5")}>
+          <div className={cn("grid grid-cols-2 gap-3", stats.total_community_posts > 0 ? "md:grid-cols-4 xl:grid-cols-7" : "md:grid-cols-3 xl:grid-cols-6")}>
             <Stat label="Total views" value={fmtCompact(stats.total_views)} accent />
             <Stat label={forUs ? "Counted posts" : "Total posts"} value={stats.total_posts.toString()} />
             {stats.total_community_posts > 0 && <Stat label={forUs ? "Counted CP" : "Community posts"} value={stats.total_community_posts.toString()} accent />}
             <Stat label="Total likes" value={fmtCompact(stats.total_likes)} />
             <Stat label="Total comments" value={fmtCompact(stats.total_comments)} />
             <Stat label="Active creators" value={stats.active_creators.toString()} />
+            <Stat
+              label="Installs / 1k views"
+              value={ipm == null ? "-" : ipm.toFixed(2)}
+              accent
+              hint={filtered ? "views are filtered, installs aren't" : stats.installs != null ? `${fmtCompact(stats.installs)} installs` : undefined}
+              title={
+                filtered
+                  ? "Installs are the app total and can't be filtered by platform or creator type, so this ratio is inflated while a filter is on."
+                  : "Total app installs in this window divided by counted views, times 1,000. Installs come from every source, not just creators, it's a rough feel for reach, not attribution."
+              }
+            />
           </div>
 
           {stats.total_posts === 0 ? (
@@ -160,7 +209,7 @@ export default function Performance({ scope = "counted" }: { scope?: "counted" |
                         <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
                         <XAxis dataKey="date" tick={{ fill: CHART.tick, fontSize: 11 }} tickLine={false} axisLine={false} minTickGap={24} />
                         <YAxis tick={{ fill: CHART.tick, fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={fmtCompact} width={44} />
-                        <Tooltip {...TOOLTIP_STYLE} formatter={(v) => [typeof v === "number" ? fmtCompact(v) : "–", "Views"]} />
+                        <Tooltip {...TOOLTIP_STYLE} formatter={(v: number) => [fmtCompact(v), "Views"]} />
                         <Area type="monotone" dataKey="views" stroke="#5b8def" strokeWidth={2} fill="url(#perfViews)" />
                       </AreaChart>
                     </ResponsiveContainer>
@@ -178,7 +227,7 @@ export default function Performance({ scope = "counted" }: { scope?: "counted" |
                         <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
                         <XAxis dataKey="date" tick={{ fill: CHART.tick, fontSize: 11 }} tickLine={false} axisLine={false} minTickGap={24} />
                         <YAxis tick={{ fill: CHART.tick, fontSize: 11 }} tickLine={false} axisLine={false} allowDecimals={false} width={32} />
-                        <Tooltip {...TOOLTIP_STYLE} formatter={(v) => [typeof v === "number" ? v : "–", "Posts"]} cursor={{ fill: "rgba(0,0,0,0.04)" }} />
+                        <Tooltip {...TOOLTIP_STYLE} formatter={(v: number) => [v, "Posts"]} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
                         <Bar dataKey="posts" fill="#8b5cf6" radius={[4, 4, 0, 0]} maxBarSize={28} />
                       </BarChart>
                     </ResponsiveContainer>
@@ -188,34 +237,73 @@ export default function Performance({ scope = "counted" }: { scope?: "counted" |
 
               <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
                 <Card>
-                  <div className="mb-3 flex items-baseline justify-between">
+                  <div className="mb-1 flex items-baseline justify-between gap-2">
                     <h3 className="text-sm font-medium text-ink">Creator leaderboard</h3>
-                    <span className="text-[11px] uppercase tracking-wider text-ink-faint">By views</span>
+                    <div className="flex gap-1">
+                      {(["views", "installs", "revenue"] as const).map((k) => (
+                        <button
+                          key={k}
+                          onClick={() => setBoardSort(k)}
+                          className={
+                            "rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors " +
+                            (boardSort === k ? "bg-app-blue/15 text-app-blue-light" : "text-ink-muted hover:text-ink")
+                          }
+                        >
+                          {k === "views" ? "Views" : k === "installs" ? "Installs" : "Revenue"}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  {stats.top_creators.length === 0 ? (
+                  {/* One table, three sorts, rather than three leaderboards.
+                      The useful signal is where the columns DISAGREE: big views
+                      and no attributed revenue sitting next to small views and
+                      real payers is the finding, and separate boards hide it.
+                      Views come from the timeframe filter above; attribution is
+                      all-time since 15 Sep and ignores that filter, which is why
+                      the columns are labelled rather than blended into a score. */}
+                  {board.length === 0 ? (
                     <p className="text-sm text-ink-faint">No creators have counted posts in this window.</p>
                   ) : (
-                    <ul className="divide-y divide-white/[0.06]">
-                      {stats.top_creators.slice(0, 10).map((c, i) => (
-                        <li key={c.id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
-                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-jp-navy-light/60 text-[10px] font-semibold num text-ink-muted">{i + 1}</span>
-                          <Avatar name={c.name} src={c.profile_image_url} />
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate text-sm font-medium text-ink">{c.name}</div>
-                            <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-ink-faint">
-                              {c.instagram_handle && <span className="rounded bg-white/[0.05] px-1 py-0.5 text-[9px] font-semibold text-ink-muted">IG</span>}
-                              {c.tiktok_handle && <span className="rounded bg-white/[0.05] px-1 py-0.5 text-[9px] font-semibold text-ink-muted">TT</span>}
-                              {c.youtube_handle && <span className="rounded bg-white/[0.05] px-1 py-0.5 text-[9px] font-semibold text-ink-muted">YT</span>}
-                              <span>· {c.posts} post{c.posts === 1 ? "" : "s"}</span>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-sm font-semibold num text-jp-blue-light">{fmtCompact(c.views)}</div>
-                            <div className="text-[10px] uppercase tracking-wider text-ink-faint">views</div>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-white/[0.06] text-left">
+                            <th className="py-2 pr-2 text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Creator</th>
+                            <th className="py-2 pr-3 text-right text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Views</th>
+                            <th className="py-2 pr-3 text-right text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Installs</th>
+                            <th className="py-2 pr-3 text-right text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Paid</th>
+                            <th className="py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Revenue</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {board.slice(0, 15).map((c, i) => (
+                            <tr key={c.id} className="border-b border-white/[0.04]">
+                              <td className="py-2 pr-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="w-4 shrink-0 text-[10px] num text-ink-faint">{i + 1}</span>
+                                  <Avatar name={c.name} src={c.profile_image_url} />
+                                  <div className="min-w-0">
+                                    <div className="truncate text-sm font-medium text-ink">{c.name}</div>
+                                    <div className="text-[10px] text-ink-faint">{c.posts} post{c.posts === 1 ? "" : "s"}</div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="py-2 pr-3 text-right num text-app-blue-light">{fmtCompact(c.views)}</td>
+                              <td className="py-2 pr-3 text-right num text-ink-muted">{c.installs ? c.installs.toLocaleString() : "-"}</td>
+                              <td className="py-2 pr-3 text-right num text-ink-muted">{c.payers ? c.payers.toLocaleString() : "-"}</td>
+                              <td className="py-2 text-right num font-medium text-app-green">
+                                {c.revenue > 0 ? `$${c.revenue < 100 ? c.revenue.toFixed(2) : Math.round(c.revenue).toLocaleString()}` : "-"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <p className="mt-2 text-[11px] text-ink-faint">
+                        Views follow the timeframe above. Installs, paid and revenue are self-reported at onboarding and
+                        only exist from 15 September 2026, so a creator who posted before then can look empty without
+                        having underperformed.
+                      </p>
+                    </div>
                   )}
                 </Card>
 
@@ -230,7 +318,7 @@ export default function Performance({ scope = "counted" }: { scope?: "counted" |
                           <Pie data={stats.platform} dataKey="views" nameKey="platform" cx="50%" cy="50%" innerRadius={42} outerRadius={70} paddingAngle={2} stroke="none">
                             {stats.platform.map((p) => <Cell key={p.platform} fill={PLATFORM_COLOR[p.platform] || "#5b8def"} />)}
                           </Pie>
-                          <Tooltip {...TOOLTIP_STYLE} formatter={(v, n) => [typeof v === "number" ? fmtCompact(v) : "–", PLATFORM_LABEL[String(n)] || String(n ?? "Views")]} />
+                          <Tooltip {...TOOLTIP_STYLE} formatter={(v: number, n: string) => [fmtCompact(v), PLATFORM_LABEL[n] || n]} />
                         </PieChart>
                       </ResponsiveContainer>
                       <ul className="mt-3 space-y-1.5">
@@ -261,5 +349,5 @@ function Avatar({ name, src }: { name: string; src: string | null }) {
     // eslint-disable-next-line @next/next/no-img-element
     return <img src={src} alt="" referrerPolicy="no-referrer" onError={() => setErr(true)} className="h-7 w-7 shrink-0 rounded-full object-cover" />;
   }
-  return <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-jp-blue/15 text-[11px] font-semibold text-jp-blue-light">{name.charAt(0).toUpperCase()}</div>;
+  return <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-app-blue/15 text-[11px] font-semibold text-app-blue-light">{name.charAt(0).toUpperCase()}</div>;
 }

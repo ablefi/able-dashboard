@@ -1,29 +1,64 @@
 import type { NextConfig } from "next";
 
 /**
- * Just Pray Admin — migrated from Create React App to Next.js (App Router).
- *
- * Phase 1 of the dashboard unification: this was `ihsan-admin`, a CRA app
- * talking to the NestJS backend (`ihsan-be`). The migration changes only the
- * React *shell* (routing, build, env prefix) — every API call, the JWT auth
- * flow, and the Ant Design UI are preserved verbatim so we can prove the port
- * didn't break anything before any redesign happens (Phase 2).
- *
- * Note: Next 16 doesn't run ESLint during `next build` (it's a separate
- * `next lint` step), so there's no eslint config needed here.
+ * Admin dashboard (Next.js App Router).
  */
+
+/**
+ * Security headers.
+ *
+ * Added 2026-09-01 after the mass-deletion incident. The dashboard hands the
+ * signed-in admin's backend JWT to the browser and keeps it in localStorage,
+ * so any script running on this origin can read it. These headers narrow that.
+ *
+ * Deliberately split in two:
+ *
+ *  - The enforced set below cannot break the app. `frame-ancestors` and
+ *    X-Frame-Options only stop OTHER sites embedding us; nosniff and
+ *    Referrer-Policy don't gate any request the page makes.
+ *
+ *  - The real prize is `connect-src`, which stops a hostile script POSTing the
+ *    token to an attacker's server. That one CAN break things if a host is
+ *    missed, so it ships as Report-Only first: the browser logs violations to
+ *    the console and blocks nothing. Once the console is clean during normal
+ *    use, move this list into an enforced Content-Security-Policy header.
+ */
+const REPORT_ONLY_CSP = [
+  "default-src 'self'",
+  // Next.js hydration needs inline scripts; without nonces this is as tight as it goes.
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https:",
+  "font-src 'self' data:",
+  // The only cross-origin calls the BROWSER makes are to the two backends.
+  // Everything else (Resend, RevenueCat, Gmail, ScrapeCreators) is server-side
+  // and never appears here.
+  `connect-src 'self' ${process.env.NEXT_PUBLIC_BACKEND_PRODUCTION_URL || ""} ${process.env.NEXT_PUBLIC_BACKEND_STAGING_URL || ""}`.trim(),
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+].join("; ");
+
 const nextConfig: NextConfig = {
   typescript: {
-    // PHASE-1 ONLY — REMOVE IN PHASE 2.
-    // The framework port itself type-checks clean (routing/auth/env all pass).
-    // The only remaining type errors are pre-existing recharts/antd chart
-    // FORMATTER strictness in the recharts tooltip components (Dashboard,
-    // ReferralCodeDetailsModal) — TS 5.6 + recharts 3 are stricter than CRA's
-    // TS 4.9, but the runtime behavior is unchanged and these components are
-    // slated for a Tailwind rewrite in Phase 2. Deferring the strictness
-    // cleanup avoids editing ~17 spots inside untouched component bodies
-    // during what is meant to be a pure lift-and-shift.
+    // A few recharts tooltip formatters trip TS's stricter checks; runtime is
+    // fine. Remove this once those formatters are typed.
     ignoreBuildErrors: true,
+  },
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+          { key: "Content-Security-Policy-Report-Only", value: REPORT_ONLY_CSP },
+        ],
+      },
+    ];
   },
 };
 

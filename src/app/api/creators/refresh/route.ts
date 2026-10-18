@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth";
+import { requireCreatorsSession, assertCreatorInMarket, marketCreatorIds, marketErrorStatus } from "@/lib/creatorMarket";
 import { pullCreatorPosts, pullPersonaPosts, refreshAllCreators } from "@/lib/scrape";
 
 /**
@@ -12,8 +13,9 @@ import { pullCreatorPosts, pullPersonaPosts, refreshAllCreators } from "@/lib/sc
 export const maxDuration = 300;
 
 export async function POST(req: NextRequest) {
-  const guard = await requireSession(req, "creators");
+  const guard = await requireCreatorsSession(req);
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
+  const market = guard.market;
 
   try {
     const { action, id, windowDays } = await req.json();
@@ -21,17 +23,22 @@ export async function POST(req: NextRequest) {
 
     if (action === "creator") {
       if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+      await assertCreatorInMarket(String(id), market);
       return NextResponse.json(await pullCreatorPosts(String(id), days));
     }
     if (action === "persona") {
       if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+      await assertCreatorInMarket(String(id), market);
       return NextResponse.json(await pullPersonaPosts(String(id), days));
     }
     if (action === "all") {
-      return NextResponse.json(await refreshAllCreators(days));
+      // Only this section's creators: no spending credits on the other one.
+      return NextResponse.json(await refreshAllCreators(days, await marketCreatorIds(market)));
     }
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   } catch (err) {
+    const status = marketErrorStatus(err);
+    if (status) return NextResponse.json({ ok: false, error: String((err as Error).message) }, { status });
     console.error("Refresh error:", err);
     return NextResponse.json({ ok: false, error: String(err) }, { status: 500 });
   }

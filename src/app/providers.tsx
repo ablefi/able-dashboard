@@ -12,7 +12,18 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <AuthProvider>
       {children}
-      <ToastContainer position="top-right" autoClose={3000} theme="dark" />
+      {/* 3s was quick enough to miss a message you'd only half-registered.
+          Styling lives in globals.css so toast() call sites stay plain. */}
+      <ToastContainer
+        position="top-right"
+        autoClose={5000}
+        theme="dark"
+        newestOnTop
+        closeOnClick
+        pauseOnHover
+        draggable
+        hideProgressBar={false}
+      />
     </AuthProvider>
   );
 }
