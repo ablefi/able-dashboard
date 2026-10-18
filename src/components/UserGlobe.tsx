@@ -57,6 +57,8 @@ const R = SIZE / 2 - 26;
 const MAP_W = 760;
 const MAP_H = 400;
 type View = "globe" | "map";
+/** Compact mode shows the globe at about 300px instead of 460px. */
+const COMPACT_SCALE = 0.65;
 const VIEW_KEY = "app_user_globe_view";
 const GRATICULE = geoGraticule().step([20, 20]).precision(2)();
 /** Centre latitude of the projection, in radians — matches rotate([spin, -18]). */
@@ -110,7 +112,16 @@ export type CountryCount = { code: string; count: number };
  * With `countries`, the globe draws that tally (at country centroids, every
  * user, no paying split) and skips the User Analysis payload entirely.
  */
-export default function UserGlobe({ countries: provided }: { countries?: CountryCount[] } = {}) {
+export default function UserGlobe({
+  countries: provided,
+  compact = false,
+  title = "Where our users are",
+}: {
+  countries?: CountryCount[];
+  /** Smaller globe and card chrome, no side list, for a 2-up row beside a country table. */
+  compact?: boolean;
+  title?: string;
+} = {}) {
   const external = provided !== undefined;
   const [fetched, setGeo] = useState<Payload | null>(null);
   const geo = useMemo<Payload | null>(() => {
@@ -134,6 +145,10 @@ export default function UserGlobe({ countries: provided }: { countries?: Country
   };
   const width = view === "map" ? MAP_W : SIZE;
   const height = view === "map" ? MAP_H : SIZE;
+  // Display size only; the canvas still draws at width x height and CSS scales it,
+  // so hit-testing (which maps back into drawing space) is unaffected.
+  const displayWidth = compact ? Math.round(width * COMPACT_SCALE) : width;
+  const wellHeight = compact ? Math.round(SIZE * COMPACT_SCALE) : SIZE;
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   // The draw loop reads these rather than closing over state, so it can be
@@ -560,12 +575,31 @@ export default function UserGlobe({ countries: provided }: { countries?: Country
         : `${listed.toLocaleString()} ${mode === "paying" ? "paying users" : "users"} · ${countries.length} countries`;
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-white/[0.06] bg-app-navy-card/40">
-      <div className="flex flex-wrap items-start justify-between gap-3 px-5 pt-5">
-        <div>
-          <h2 className="text-sm font-semibold text-ink">Where our users are</h2>
-          <p className="mt-0.5 text-xs text-ink-faint">{subtitle}</p>
-        </div>
+    <div
+      className={
+        compact
+          ? "app-card relative overflow-hidden rounded-xl border border-white/[0.06] bg-app-navy-card/60"
+          : "relative overflow-hidden rounded-2xl border border-white/[0.06] bg-app-navy-card/40"
+      }
+    >
+      <div
+        className={
+          compact
+            ? "app-card-head flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-white/[0.06] px-5 py-4"
+            : "flex flex-wrap items-start justify-between gap-3 px-5 pt-5"
+        }
+      >
+        {compact ? (
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+            <h2 className="text-sm font-semibold text-ink">{title}</h2>
+            <span className="text-[11px] text-ink-faint">{subtitle}</span>
+          </div>
+        ) : (
+          <div>
+            <h2 className="text-sm font-semibold text-ink">{title}</h2>
+            <p className="mt-0.5 text-xs text-ink-faint">{subtitle}</p>
+          </div>
+        )}
         {geo !== null && (
           <div className="flex flex-wrap items-center gap-2">
           <div className="inline-flex gap-1 rounded-lg border border-white/[0.08] bg-app-navy-card/60 p-0.5" role="group" aria-label="View">
@@ -603,15 +637,15 @@ export default function UserGlobe({ countries: provided }: { countries?: Country
         )}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_260px]">
-      <div className="relative flex justify-center pb-4">
+      <div className={compact ? "grid" : "grid gap-4 lg:grid-cols-[1fr_260px]"}>
+      <div className={compact ? "relative flex justify-center py-2" : "relative flex justify-center pb-4"}>
         {loading ? (
-          <div className="flex h-[460px] items-center justify-center text-ink-faint">
+          <div className="flex items-center justify-center text-ink-faint" style={{ height: wellHeight }}>
             <Loader2 className="h-5 w-5 animate-spin" />
           </div>
         ) : empty ? (
-          <div className="flex h-[460px] flex-col items-center justify-center gap-2 text-ink-faint">
-            <Globe2 className="h-8 w-8 opacity-40" />
+          <div className="flex flex-col items-center justify-center gap-2 text-ink-faint" style={{ height: wellHeight }}>
+            {!compact && <Globe2 className="h-8 w-8 opacity-40" />}
             <p className="max-w-xs text-center text-xs">
               {external
                 ? "No signups yet. Countries appear here as people sign up."
@@ -622,7 +656,7 @@ export default function UserGlobe({ countries: provided }: { countries?: Country
           <canvas
             ref={canvasRef}
             className="max-w-full"
-            style={{ width, height: "auto", aspectRatio: `${width} / ${height}` }}
+            style={{ width: displayWidth, height: "auto", aspectRatio: `${width} / ${height}` }}
             onMouseMove={(e) => {
               // The canvas can be laid out smaller than its drawing surface,
               // so map the cursor back into SIZE-space before hit-testing.
@@ -650,7 +684,7 @@ export default function UserGlobe({ countries: provided }: { countries?: Country
 
         {/* The globe is the nice part, but a sphere only ever shows you half
             the world at once, the list is what you actually read off. */}
-        {!loading && !empty && (
+        {!compact && !loading && !empty && (
           <div className="hidden pr-5 lg:block">
             <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-faint">Top countries</div>
             <ol className="space-y-1.5">
@@ -684,7 +718,7 @@ export default function UserGlobe({ countries: provided }: { countries?: Country
       </div>
 
       {!loading && !empty && (
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-white/[0.06] px-5 py-2.5 text-[10px] text-ink-faint">
+        <div className={`flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-white/[0.06] ${compact ? "px-3 py-1.5" : "px-5 py-2.5"} text-[10px] text-ink-faint`}>
           <span>
             {hasRealCells
               ? (byGps != null

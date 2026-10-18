@@ -12,7 +12,7 @@ import Empty from "@/components/ui/Empty";
 import { SortTh } from "@/components/ui/SortableHeader";
 import { searchAbleUsersByPhone, useAbleReport } from "@/lib/useAbleReport";
 import { STAT_NEUTRAL } from "@/lib/statColors";
-import { ACCENT, CHART, SERIES, TOOLTIP_STYLE, axisProps, fmtInt } from "@/lib/chartTheme";
+import { ACCENT, CHART, CHART_H, SERIES, TOOLTIP_STYLE, axisProps, fmtInt, fmtPct, fmtUsd } from "@/lib/chartTheme";
 import { regionFlag } from "@/lib/countries";
 import { cn } from "@/lib/utils";
 
@@ -45,7 +45,18 @@ interface PlatformRow {
 
 interface MarketingReport {
   generatedAt: string;
-  users: { total: number; avgAge: number | null };
+  users: {
+    total: number;
+    newLast7d?: number;
+    newLast30d?: number;
+    /** Users who signed up with an invite code. */
+    referred?: number;
+    referredPct?: number | null;
+    /** Any sign-in or trusted-device sighting in the window; signup itself counts. */
+    activeLast7d?: number;
+    activeLast30d?: number;
+    avgAge: number | null;
+  };
   deposits: { perSignupUsdt: number };
   spend: { perSignupUsd: number };
   platforms?: PlatformRow[];
@@ -66,20 +77,35 @@ const COLUMNS: { key: SortKey; label: string; right?: boolean }[] = [
   { key: "country", label: "Country" },
   { key: "ageBand", label: "Age band" },
   { key: "createdAt", label: "Joined" },
-  { key: "referredBy", label: "Code used" },
+  { key: "referredBy", label: "Invite code" },
   { key: "kyc", label: "KYC" },
-  { key: "balanceUsdt", label: "Balance USDT", right: true },
+  { key: "balanceUsdt", label: "Wallet USDT", right: true },
   { key: "depositUsdt", label: "Deposited USDT", right: true },
-  { key: "spendUsd", label: "Spent USD", right: true },
-  { key: "txns", label: "Purchases", right: true },
+  { key: "spendUsd", label: "Net spend USD", right: true },
+  { key: "txns", label: "Card txns", right: true },
   { key: "lastActiveAt", label: "Last active" },
 ];
 
 const inputCls =
-  "w-full min-w-0 rounded-lg border border-white/[0.08] bg-app-navy-light/60 px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-app-blue/45 focus:outline-none sm:w-72";
-const labelCls = "mb-1 block text-[11px] font-medium uppercase tracking-wider text-ink-faint";
+  "h-7 w-full min-w-0 rounded-md border border-white/[0.08] bg-app-navy-light/60 px-2 text-xs text-ink placeholder:text-ink-faint focus:border-app-blue/45 focus:outline-none sm:w-56";
+const labelCls = "text-[11px] font-medium uppercase tracking-wider text-ink-faint";
+const btnCls = "h-7 rounded-md px-2.5 text-xs";
 
+/** UTC calendar day, YYYY-MM-DD. The CSV keeps this form. */
 const day = (iso: string | null | undefined) => String(iso ?? "").slice(0, 10);
+/** UTC day for the table: "Oct 3", or "Oct 3, 2026" when the loaded rows span years. */
+const fmtDate = (iso: string | null | undefined, withYear: boolean) => {
+  const d = day(iso);
+  if (!d) return "-";
+  return new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    ...(withYear ? { year: "numeric" as const } : {}),
+    timeZone: "UTC",
+  });
+};
+/** Share of all users as "12.3%", "-" when either side is unknown. */
+const share = (part: number | null | undefined, whole: number) => (part == null || whole <= 0 ? "-" : fmtPct((part / whole) * 100));
 const fmtNum = (n: number | null | undefined, dp = 2) =>
   n == null ? "-" : Number(n).toLocaleString("en-US", { maximumFractionDigits: dp });
 const dash = <span className="text-ink-faint">-</span>;
@@ -202,20 +228,32 @@ export default function Roster() {
       : { key, dir: TEXT_COLS.includes(key) ? 1 : -1 });
   };
 
-  const heading = phoneRows !== null ? "Phone search results" : query.trim() ? "Filtered users" : "Everyone, newest first";
+
+  // Show the year only when the loaded dates span more than one.
+  const withYear = useMemo(() => {
+    const years = new Set<string>();
+    for (const r of roster ?? []) {
+      years.add(day(r.createdAt).slice(0, 4));
+      years.add(day(r.lastActiveAt).slice(0, 4));
+    }
+    years.delete("");
+    return years.size > 1;
+  }, [roster]);
+
+  const heading = phoneRows !== null ? "Phone search results" : query.trim() ? "Users matching filter" : "All users";
   const countLine = !data || !roster ? "" : phoneRows === null
-    ? `Showing ${rows.length.toLocaleString()} of ${data.users.total.toLocaleString()} users`
-      + (data.users.total > roster.length ? ` (newest ${roster.length.toLocaleString()} loaded)` : "")
-      + ". Phones are masked to the country prefix and last 4 digits. Click a column header to sort."
-    : `Phone search: ${rows.length.toLocaleString()} matching user${rows.length === 1 ? "" : "s"}. Phones are masked to the country prefix and last 4 digits. Click a column header to sort.`;
+    ? `${rows.length.toLocaleString()} of ${data.users.total.toLocaleString()} users`
+      + (data.users.total > roster.length ? `, newest ${roster.length.toLocaleString()} loaded` : "")
+    : `${rows.length.toLocaleString()} matching user${rows.length === 1 ? "" : "s"}`;
 
   const platforms = data?.platforms;
+  const u = data?.users;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
       <PageHeader
         title="Users"
-        subtitle={at ? `Updated ${new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "Every Able account, newest first"}
+        subtitle={at ? `Updated ${new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : undefined}
         actions={
           <Button variant="secondary" size="sm" onClick={() => void refresh()} disabled={loading}>
             <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} /> Refresh
@@ -225,63 +263,72 @@ export default function Roster() {
 
       {error && <div className="rounded-lg border border-app-red/30 bg-app-red/10 px-4 py-2.5 text-sm text-app-red-text">Could not load users: {error}</div>}
 
-      {!data ? (
+      {!data || !u ? (
         !error && (
           <div className="flex items-center justify-center py-24 text-ink-muted">
             <Loader2 className="mr-2 h-6 w-6 animate-spin" /> Loading users…
           </div>
         )
-      ) : !roster ? (
-        <Empty title="The user roster is not available yet" description="The API deploy serving this report does not include the roster. It appears here once that deploy is live." />
       ) : (
-        <div className={loading ? "space-y-4 opacity-60 transition-opacity" : "space-y-4 transition-opacity"}>
-          {platforms && (
-            <>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <FinCard label="Average age" valueClass={STAT_NEUTRAL} note="Users with a date of birth">
-                  {data.users.avgAge === null ? "-" : fmtNum(data.users.avgAge, 1)}
-                </FinCard>
-                <FinCard label="Deposit per signup" valueClass={STAT_NEUTRAL} note="Lifetime deposits over all users">
-                  {fmtNum(data.deposits.perSignupUsdt)} <span className="text-sm font-medium text-ink-faint">USDT</span>
-                </FinCard>
-                <FinCard label="Card spend per signup" valueClass={STAT_NEUTRAL} note="Lifetime net spend over all users">
-                  {fmtNum(data.spend.perSignupUsd)} <span className="text-sm font-medium text-ink-faint">USD</span>
-                </FinCard>
-              </div>
+        <div className={cn("space-y-3 transition-opacity", loading && "opacity-60")}>
+          <div className="app-stat-grid grid">
+            <FinCard label="Users" valueClass={STAT_NEUTRAL} note={u.newLast7d != null ? `+${fmtInt(u.newLast7d)} in last 7 days` : undefined}>
+              {fmtInt(u.total)}
+            </FinCard>
+            <FinCard label="New users, last 30 days" valueClass={STAT_NEUTRAL} note={`${share(u.newLast30d, u.total)} of users`}>
+              {fmtInt(u.newLast30d)}
+            </FinCard>
+            <FinCard label="Active, last 7 days" valueClass={STAT_NEUTRAL} note="Signed in or device seen">
+              {fmtInt(u.activeLast7d)}
+            </FinCard>
+            <FinCard label="Active, last 30 days" valueClass={STAT_NEUTRAL} note={`${share(u.activeLast30d, u.total)} of users`}>
+              {fmtInt(u.activeLast30d)}
+            </FinCard>
+            <FinCard label="Signed up with invite code" valueClass={STAT_NEUTRAL} note={u.referredPct != null ? `${fmtPct(u.referredPct)} of users` : undefined}>
+              {fmtInt(u.referred)}
+            </FinCard>
+            <FinCard label="Average age, years" valueClass={STAT_NEUTRAL} note="Users with a date of birth">
+              {u.avgAge === null ? "-" : fmtNum(u.avgAge, 1)}
+            </FinCard>
+            <FinCard label="Deposits per signup" valueClass={STAT_NEUTRAL} note="All time, over all users">
+              {fmtNum(data.deposits.perSignupUsdt)} <span className="text-sm font-medium text-ink-faint">USDT</span>
+            </FinCard>
+            <FinCard label="Net card spend per signup" valueClass={STAT_NEUTRAL} note="All time, over all users">
+              {fmtUsd(data.spend.perSignupUsd, 2)}
+            </FinCard>
+          </div>
 
-              <Card title="Users by platform and app build (active 30d highlighted)" className="chart-card">
-                {platforms.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={280}>
-                    <BarChart data={platforms} barGap={2}>
-                      <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
-                      <XAxis dataKey="label" {...axisProps} interval={0} />
-                      <YAxis {...axisProps} allowDecimals={false} />
-                      <Tooltip {...TOOLTIP_STYLE} formatter={(v: number) => fmtInt(v)} />
-                      <Legend verticalAlign="top" align="right" iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 12, paddingBottom: 8 }} />
-                      <Bar dataKey="users" name="All users" fill={SERIES[1]} radius={[3, 3, 0, 0]} maxBarSize={22} />
-                      <Bar dataKey="activeLast30d" name="Active 30d" fill={ACCENT} radius={[3, 3, 0, 0]} maxBarSize={22} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="h-[280px]"><Empty compact title="No device data yet" description="Platforms appear once users sign up or sign in from the app." /></div>
-                )}
-              </Card>
-            </>
+          {platforms && (
+            <Card title="Users by last-seen platform and app build" className="chart-card">
+              {platforms.length > 0 ? (
+                <ResponsiveContainer width="100%" height={CHART_H}>
+                  <BarChart data={platforms} barGap={2}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
+                    <XAxis dataKey="label" {...axisProps} interval={0} />
+                    <YAxis width={36} {...axisProps} allowDecimals={false} />
+                    <Tooltip {...TOOLTIP_STYLE} formatter={(v: number, name: string) => [fmtInt(v), name]} />
+                    <Legend verticalAlign="top" align="right" iconType="circle" iconSize={7} height={20} wrapperStyle={{ fontSize: 11 }} />
+                    <Bar dataKey="users" name="All users" fill={SERIES[1]} radius={[3, 3, 0, 0]} maxBarSize={20} isAnimationActive={false} />
+                    <Bar dataKey="activeLast30d" name="Active, last 30 days" fill={ACCENT} radius={[3, 3, 0, 0]} maxBarSize={20} isAnimationActive={false} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div style={{ height: CHART_H }}><Empty compact title="No device data yet" /></div>
+              )}
+            </Card>
           )}
 
-          <Card
-            title={heading}
-            bodyClassName="p-0"
-            actions={
-              <Button size="sm" variant="secondary" onClick={() => downloadCsv(rows)} disabled={rows.length === 0}>
-                <Download className="h-3.5 w-3.5" /> Export visible CSV
-              </Button>
-            }
-          >
-            <div className="flex flex-wrap items-end gap-x-6 gap-y-4 border-b border-white/[0.06] px-5 py-4">
-              <form className="min-w-0" onSubmit={(e) => { e.preventDefault(); filterLoaded(query); }}>
-                <label htmlFor="roster-filter" className={labelCls}>Filter loaded users</label>
-                <div className="flex flex-wrap items-center gap-2">
+          {!roster ? (
+            <Empty compact title="The user roster is not available yet" description="The API deploy serving this report does not include the roster." />
+          ) : (
+            <Card
+              title={heading}
+              bodyClassName="p-0"
+              actions={<span className="text-[11px] text-ink-faint num">{countLine}</span>}
+            >
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-white/[0.06] px-3 py-2">
+                <form className="flex min-w-0 flex-wrap items-center gap-1.5" onSubmit={(e) => { e.preventDefault(); filterLoaded(query); }}>
+                  <label htmlFor="roster-filter" className={labelCls}>Filter loaded</label>
                   <input
                     id="roster-filter"
                     type="search"
@@ -290,13 +337,11 @@ export default function Roster() {
                     value={query}
                     onChange={(e) => filterLoaded(e.target.value)}
                   />
-                  <Button type="submit" size="sm" variant="secondary">Search</Button>
-                  <Button type="button" size="sm" variant="ghost" onClick={() => filterLoaded("")}>Clear</Button>
-                </div>
-              </form>
-              <form className="min-w-0" onSubmit={searchPhone}>
-                <label htmlFor="roster-phone" className={labelCls}>Find by full phone number</label>
-                <div className="flex flex-wrap items-center gap-2">
+                  <Button type="submit" size="sm" variant="secondary" className={btnCls}>Search</Button>
+                  <Button type="button" size="sm" variant="ghost" className={btnCls} onClick={() => filterLoaded("")}>Clear</Button>
+                </form>
+                <form className="flex min-w-0 flex-wrap items-center gap-1.5" onSubmit={searchPhone}>
+                  <label htmlFor="roster-phone" className={labelCls}>Full phone</label>
                   <input
                     id="roster-phone"
                     type="tel"
@@ -307,61 +352,66 @@ export default function Roster() {
                     value={phone}
                     onChange={(e) => { resetPhone(); setPhone(e.target.value); }}
                   />
-                  <Button type="submit" size="sm" variant="secondary" disabled={searching}>
+                  <Button type="submit" size="sm" variant="secondary" className={btnCls} disabled={searching}>
                     {searching && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Search
                   </Button>
-                  <Button type="button" size="sm" variant="ghost" onClick={() => { resetPhone(); setPhone(""); }}>Clear</Button>
+                  <Button type="button" size="sm" variant="ghost" className={btnCls} onClick={() => { resetPhone(); setPhone(""); }}>Clear</Button>
                   {phoneStatus && <span role="status" aria-live="polite" className="text-xs text-ink-muted">{phoneStatus}</span>}
-                </div>
-              </form>
-            </div>
+                </form>
+                <Button size="sm" variant="secondary" className={cn(btnCls, "ml-auto")} onClick={() => downloadCsv(rows)} disabled={rows.length === 0}>
+                  <Download className="h-3.5 w-3.5" /> Export visible CSV
+                </Button>
+              </div>
 
-            <div className="max-h-[70vh] overflow-auto">
-              <table className="w-full min-w-[1190px] text-sm">
-                <thead className="sticky top-0 z-10 bg-app-navy-card">
-                  <tr className="border-b border-white/[0.06] text-left">
-                    {COLUMNS.map((c) => (
-                      <SortTh
-                        key={c.key}
-                        label={c.label}
-                        sortKey={c.key}
-                        active={sort.key === c.key}
-                        dir={sort.dir === 1 ? "asc" : "desc"}
-                        onToggle={toggleSort}
-                        className={cn("whitespace-nowrap", c.right && "text-right")}
-                      />
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r) => {
-                    const flag = regionFlag(r.country);
-                    return (
-                      <tr key={r.userId} className="whitespace-nowrap border-b border-white/[0.04] align-middle text-ink-muted hover:bg-white/[0.02]">
-                        <td className="px-4 py-3">
-                          <span className="block font-medium text-ink">{r.name}</span>
-                          {r.username && <span className="block text-[11px] text-ink-faint">@{r.username}</span>}
-                        </td>
-                        <td className="px-4 py-3 num">{r.phoneMasked}</td>
-                        <td className="px-4 py-3" title={r.country}>{flag ? `${flag} ` : ""}{r.country}</td>
-                        <td className="px-4 py-3">{r.ageBand ?? dash}</td>
-                        <td className="px-4 py-3 num">{day(r.createdAt)}</td>
-                        <td className="px-4 py-3">{r.referredBy ?? dash}</td>
-                        <td className="px-4 py-3"><Badge variant={kycVariant(r.kyc)}>{String(r.kyc).replace(/_/g, " ")}</Badge></td>
-                        <td className="px-4 py-3 text-right num">{fmtNum(r.balanceUsdt)}</td>
-                        <td className="px-4 py-3 text-right num">{fmtNum(r.depositUsdt)}</td>
-                        <td className="px-4 py-3 text-right num">{fmtNum(r.spendUsd)}</td>
-                        <td className="px-4 py-3 text-right num">{fmtInt(r.txns)}</td>
-                        <td className="px-4 py-3 num">{day(r.lastActiveAt)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              {rows.length === 0 && <Empty compact title="No matching users" />}
-            </div>
-            <p className="border-t border-white/[0.06] px-5 py-3 text-xs text-ink-faint">{countLine}</p>
-          </Card>
+              <div className="max-h-[70vh] overflow-auto">
+                <table className="w-full min-w-[1100px] text-sm">
+                  <thead className="sticky top-0 z-10 bg-app-navy-card">
+                    <tr className="border-b border-white/[0.06] text-left">
+                      {COLUMNS.map((c) => (
+                        <SortTh
+                          key={c.key}
+                          label={c.label}
+                          sortKey={c.key}
+                          active={sort.key === c.key}
+                          dir={sort.dir === 1 ? "asc" : "desc"}
+                          onToggle={toggleSort}
+                          className={cn("whitespace-nowrap", c.right && "text-right")}
+                        />
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r) => {
+                      const flag = regionFlag(r.country);
+                      return (
+                        <tr key={r.userId} className="whitespace-nowrap border-b border-white/[0.04] align-middle text-ink-muted hover:bg-white/[0.02]">
+                          <td className="max-w-[16rem] truncate" title={r.username ? `${r.name} @${r.username}` : r.name}>
+                            <span className="font-medium text-ink">{r.name}</span>
+                            {r.username && <span className="ml-1.5 text-[11px] text-ink-faint">@{r.username}</span>}
+                          </td>
+                          <td className="num">{r.phoneMasked}</td>
+                          <td title={r.country}>{flag ? `${flag} ` : ""}{r.country}</td>
+                          <td>{r.ageBand ?? dash}</td>
+                          <td className="num" title={day(r.createdAt)}>{fmtDate(r.createdAt, withYear)}</td>
+                          <td>{r.referredBy ?? dash}</td>
+                          <td><Badge variant={kycVariant(r.kyc)}>{String(r.kyc).replace(/_/g, " ")}</Badge></td>
+                          <td className="text-right num">{fmtNum(r.balanceUsdt)}</td>
+                          <td className="text-right num">{fmtNum(r.depositUsdt)}</td>
+                          <td className="text-right num">{fmtNum(r.spendUsd)}</td>
+                          <td className="text-right num">{fmtInt(r.txns)}</td>
+                          <td className="num" title={day(r.lastActiveAt)}>{fmtDate(r.lastActiveAt, withYear)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                {rows.length === 0 && <Empty compact title="No matching users" />}
+              </div>
+              <p className="border-t border-white/[0.06] px-3 py-1.5 text-[11px] text-ink-faint">
+                Phones are masked to the country prefix and last 4 digits.
+              </p>
+            </Card>
+          )}
         </div>
       )}
     </div>

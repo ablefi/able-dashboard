@@ -95,6 +95,7 @@ interface TokenPayload {
 export const LOCAL_PERMISSIONS = [
   "dashboard:read",
   "creators:read",
+  "creators:write",
   "social:read",
   "research:read",
   "compliance:read",

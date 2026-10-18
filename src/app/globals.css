@@ -923,3 +923,79 @@ table tbody tr[data-row-action]:focus-visible {
   outline: 2px solid var(--color-app-blue-light);
   outline-offset: -2px;
 }
+
+/* ===========================================================================
+   Density (applies in every presentation)
+
+   This is an operations dashboard: the job is to see a lot at once and compare
+   it. Last in the file so it wins ties with the presentation blocks above;
+   presentation still decides surfaces and colour, this decides spacing. */
+
+.app-shell .app-canvas {
+  max-width: 124rem;
+  margin-inline: auto;
+  padding: 1rem 1.25rem 5rem !important;
+}
+
+.app-shell .app-page-header { margin-bottom: 0.75rem !important; }
+.app-shell .app-page-header h1 { font-size: 1.2rem !important; letter-spacing: -0.015em !important; }
+.app-shell .app-page-header p { margin-top: 0.1rem !important; font-size: 0.75rem !important; color: var(--color-ink-faint) !important; }
+
+.app-shell .app-card-head { padding: 0.5rem 0.85rem !important; min-height: 2.25rem; }
+.app-shell .app-card-head h2 {
+  font-size: 0.6875rem !important;
+  font-weight: 500 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.06em !important;
+  color: var(--color-ink-faint) !important;
+}
+.app-shell .app-card-body { padding: 0.7rem 0.85rem !important; }
+/* Opt-out for cards whose body is a flush table or list. */
+.app-shell .app-card-body.p-0 { padding: 0 !important; }
+
+/* Stat tiles: label over figure, left-aligned, small enough for 6 to 8 a row. */
+.app-shell .app-stat-grid {
+  grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)) !important;
+  gap: 0.5rem !important;
+}
+.app-shell .app-fincard {
+  align-items: flex-start !important;
+  text-align: left !important;
+  padding: 0.55rem 0.75rem 0.65rem !important;
+}
+.app-shell .app-fincard-label {
+  font-size: 0.625rem !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.06em !important;
+}
+.app-shell .app-fincard-value {
+  margin-top: 0.3rem !important;
+  font-size: 1.3rem !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.015em !important;
+}
+.app-shell .app-fincard > div:last-child:not(.app-fincard-value) { margin-top: 0.2rem !important; font-size: 0.65rem !important; }
+.app-shell .app-stat { padding: 0.6rem 0.75rem !important; }
+.app-shell .app-stat .num { font-size: 1.3rem !important; font-weight: 600 !important; }
+
+/* Tables: compact rows, sticky header, whole-row hover, aligned digits. */
+.app-shell table { width: 100%; }
+.app-shell table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  padding: 0.35rem 0.6rem !important;
+  font-size: 0.65rem !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  background: color-mix(in oklab, var(--color-app-navy-card) 96%, transparent);
+}
+.app-shell table tbody td {
+  padding: 0.3rem 0.6rem !important;
+  font-size: 0.78rem !important;
+}
+.app-shell table tbody tr:hover { background: rgb(255 255 255 / 0.035); }
+.app-shell .num,
+.app-shell table td,
+.app-shell table th { font-variant-numeric: tabular-nums; }

@@ -37,9 +37,12 @@ lucide-react.
   boundary for the Able proxy and Supabase routes. Nav filtering is UX only.
 
 ## Boundaries
-- The Able proxy is an exact read-only allowlist. Never add write routes or
-  `/marketing/users/details` to it; operator writes need the API admin token.
-- Never send `API_TOKEN` or the Supabase key to the browser.
+- The read proxy (`/api/able`) is an exact read-only allowlist. Never add write
+  routes or `/marketing/users/details` to it.
+- The only writes are creator edits through `/api/able/write` with the scoped
+  `CREATORS_API_TOKEN` (exact allowlist in `isCreatorWrite`, `creators:write`
+  permission). Never put the API's full admin `API_TOKEN` in this project.
+- Never send `API_TOKEN`, `CREATORS_API_TOKEN` or the Supabase key to the browser.
 
 ## Conventions
 - Colours come from `--color-app-*` / `--color-cat-*` tokens; don't hard-code hex.

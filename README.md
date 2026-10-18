@@ -11,8 +11,8 @@ Built on the admin dashboard template (the JustPray dashboard with its branding 
 | Dashboard | Services and latency, money, users map, signups, deposits, card spend, card funnel, countries, KYC, age bands, ledger, top referrers | Able API `/health`, `/health/upstream`, `/stats` |
 | Users | Users (roster, exact phone search, CSV export), Compliance | Able API `/marketing`, `/compliance` |
 | Users (later) | Accounts, User Analysis | Backend `/admin/users` (not built; hidden) |
-| Creators | Creators (roster, deal terms, invite codes, counted views, CPM), Posts | Able API `/creators` |
-| Growth | Growth, Activation, Referrals, Card spend | Able API `/marketing` |
+| Creators | Creators (roster, deal terms, invite codes, counted views, CPM; add, edit, remove, refresh), creator page, Posts (approve, exclude, outliers), Calendar | Able API `/creators` and creator writes |
+| Growth | Growth (acquisition, activation, referral codes), Money (deposits, card spend) | Able API `/marketing` |
 | Growth | Website Analytics, Competitors, App Store Reviews | Supabase, iTunes RSS |
 | Giving | Overview, disbursement worksheet, monthly statement, CSV for the accountant | Able API `/giving/report`, `/giving/statement` |
 | Referral Codes, Admins | Template pages | Backend `/admin/*` (not built; hidden) |
@@ -21,9 +21,11 @@ Built on the admin dashboard template (the JustPray dashboard with its branding 
 
 `/api/able?path=…` (`src/app/api/able/route.ts`, `src/lib/ableApi.ts`) forwards to Able's API with `API_TOKEN`, the API's read-only `DASHBOARD_API_TOKEN`. It allows exactly the API routes marked `dashboard-read`: `GET /health`, `/health/upstream`, `/stats`, `/compliance`, `/marketing`, `/creators`, `/giving/report`, `/giving/statement`, and `POST /marketing/users/search` (exact phone lookup). Each path is gated on the signed-in session's section permission. The token never reaches the browser.
 
-All of these are read-only. Recording Giving payments, editing creators and approving or excluding posts need the API admin token and are done by an operator outside this dashboard, as with the old Ops viewer link. Phones arrive masked from the API.
+Those reads are all read-only. Phones arrive masked from the API.
 
-Creators and posts live in Able's API, which scrapes every creator's feed every 8 hours on Railway (see `docs/creators.md` in the `able` repo). This dashboard does not scrape.
+Creator edits go through `/api/able/write` (`src/app/api/able/write/route.ts`) with `CREATORS_API_TOKEN`, the API's scoped creators token. It allows exactly `POST /creators`, `DELETE /creators/:id`, `POST /creators/refresh`, `POST /creators/:id/refresh` and `POST /creators/posts/:id`, and needs the `creators:write` permission. The API accepts that token on those five routes only (access `creators-write` in `apps/api/src/admin.ts`). Recording Giving payments still needs the API admin token and is done by an operator outside this dashboard.
+
+Creators and posts live in Able's API, which scrapes every creator's feed every 8 hours on Railway (see `docs/creators.md` in the `able` repo). "Refresh feed" here asks the API to scrape now.
 
 ## Sign-in
 

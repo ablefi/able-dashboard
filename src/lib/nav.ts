@@ -15,7 +15,7 @@ import { sectionForPath } from "@/lib/sections";
 import {
   LayoutDashboard, Users, Gift, Users2, MessageSquare,
   Globe, Crosshair, BarChart3, FileText, ShieldCheck, Trophy,
-  Fingerprint, TrendingUp, Filter, Share2, CreditCard, HeartHandshake, UserCog,
+  Fingerprint, TrendingUp, Wallet, CalendarDays, HeartHandshake, UserCog,
 } from "lucide-react";
 
 export type NavIcon = typeof Users;
@@ -50,15 +50,14 @@ export const NAV: Node[] = [
     items: [
       { href: "/creators", label: "Creators", icon: Users2 },
       { href: "/creators/posts", label: "Posts", icon: FileText },
+      { href: "/creators/calendar", label: "Calendar", icon: CalendarDays },
     ],
   },
   {
     kind: "section", id: "growth", label: "Growth", icon: Crosshair,
     items: [
       { href: "/growth", label: "Growth", icon: TrendingUp },
-      { href: "/activation", label: "Activation", icon: Filter },
-      { href: "/referrals", label: "Referrals", icon: Share2 },
-      { href: "/card-spend", label: "Card spend", icon: CreditCard },
+      { href: "/money", label: "Money", icon: Wallet },
       { href: "/website", label: "Website Analytics", icon: Globe },
       { href: "/competitors", label: "Competitors", icon: Trophy },
       { href: "/reviews", label: "App Store Reviews", icon: MessageSquare },

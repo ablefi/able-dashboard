@@ -6,12 +6,26 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import PageHeader from "@/components/ui/PageHeader";
 import Button from "@/components/ui/Button";
 import Empty from "@/components/ui/Empty";
-import { SERIES, TOOLTIP_STYLE } from "@/lib/chartTheme";
+import { CHART_H, SERIES, TOOLTIP_STYLE } from "@/lib/chartTheme";
 import { useAbleReport } from "@/lib/useAbleReport";
 import { cn } from "@/lib/utils";
 
-export const CHART_HEIGHT = 260;
 const DEFAULT_REFRESH_MS = 5 * 60_000;
+
+/** Recharts legend for charts with two or more series: top right, small. */
+export const LEGEND_PROPS = {
+  verticalAlign: "top",
+  align: "right",
+  iconType: "circle",
+  iconSize: 6,
+  wrapperStyle: { fontSize: 11, paddingBottom: 4 },
+} as const;
+
+/**
+ * Cancels the card body padding (the Density block in globals.css pins it to
+ * 0.7rem 0.85rem) so a table sits flush with the card edges.
+ */
+export const FLUSH = "-mx-[0.85rem] -my-[0.7rem]";
 
 /**
  * Header, refresh, error banner and first-load state for a page built on one
@@ -33,7 +47,7 @@ export default function ReportPage<T>({
   const updated = at ? `Updated ${new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : undefined;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
       <PageHeader
         title={title}
         subtitle={updated}
@@ -44,14 +58,14 @@ export default function ReportPage<T>({
         }
       />
 
-      {error && <div className="rounded-lg border border-app-red/30 bg-app-red/10 px-4 py-2.5 text-sm text-app-red-text">{error}</div>}
+      {error && <div className="rounded-lg border border-app-red/30 bg-app-red/10 px-3 py-2 text-xs text-app-red-text">{error}</div>}
 
       {data ? (
-        <div className={cn("space-y-4 transition-opacity", loading && "opacity-60")}>{children(data)}</div>
+        <div className={cn("space-y-3 transition-opacity", loading && "opacity-60")}>{children(data)}</div>
       ) : (
         !error && (
-          <div className="flex items-center justify-center py-24 text-ink-muted">
-            <Loader2 className="mr-2 h-6 w-6 animate-spin" /> Loading report…
+          <div className="flex items-center justify-center py-16 text-sm text-ink-muted">
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading report
           </div>
         )
       )}
@@ -63,15 +77,15 @@ export default function ReportPage<T>({
 export function Amount({ value, unit }: { value: string; unit: string }) {
   return (
     <>
-      {value} <span className="text-sm font-medium text-ink-faint">{unit}</span>
+      {value} <span className="text-[0.65em] font-medium text-ink-faint">{unit}</span>
     </>
   );
 }
 
 /** Fixed-height chart well holding a compact empty state. */
-export function ChartEmpty({ title, description }: { title: string; description?: string }) {
+export function ChartEmpty({ title, description, height = CHART_H }: { title: string; description?: string; height?: number }) {
   return (
-    <div style={{ height: CHART_HEIGHT }}>
+    <div style={{ height }}>
       <Empty compact title={title} description={description} />
     </div>
   );
@@ -79,14 +93,17 @@ export function ChartEmpty({ title, description }: { title: string; description?
 
 /**
  * Share-of-total donut with a legend list. Slices past the palette fold into
- * "Other" so colours never repeat; the list still names every row and its value.
+ * "Other" so colours never repeat; the list still names every row and its
+ * value, and scrolls inside the chart height when it is longer.
  */
 export function Donut({
   rows,
   format,
+  height = CHART_H,
 }: {
   rows: { name: string; value: number }[];
   format: (n: number) => string;
+  height?: number;
 }) {
   const total = rows.reduce((s, r) => s + r.value, 0);
   const max = SERIES.length;
@@ -97,8 +114,8 @@ export function Donut({
   const colourAt = (i: number) => SERIES[Math.min(i, slices.length - 1)];
 
   return (
-    <div className="flex flex-col items-center gap-4 sm:flex-row">
-      <div className="w-full sm:w-1/2" style={{ height: CHART_HEIGHT }}>
+    <div className="flex flex-col items-center gap-3 sm:flex-row">
+      <div className="w-full sm:w-2/5" style={{ height }}>
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie data={slices} dataKey="value" nameKey="name" innerRadius="62%" outerRadius="90%" paddingAngle={slices.length > 1 ? 2 : 0} stroke="none" isAnimationActive={false}>
@@ -110,13 +127,13 @@ export function Donut({
           </PieChart>
         </ResponsiveContainer>
       </div>
-      <ul className="w-full min-w-0 flex-1 space-y-1.5">
+      <ul className="w-full min-w-0 flex-1 space-y-1 overflow-auto" style={{ maxHeight: height }}>
         {rows.map((r, i) => (
           <li key={r.name} className="flex items-baseline gap-2 text-xs">
             <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: colourAt(i) }} />
             <span className="min-w-0 flex-1 truncate text-ink-muted">{r.name}</span>
             <span className="shrink-0 text-ink num">{format(r.value)}</span>
-            <span className="w-10 shrink-0 text-right text-ink-faint num">{total > 0 ? `${Math.round((r.value / total) * 100)}%` : "-"}</span>
+            <span className="w-12 shrink-0 text-right text-ink-faint num">{total > 0 ? `${((r.value / total) * 100).toFixed(1)}%` : "-"}</span>
           </li>
         ))}
       </ul>
@@ -130,7 +147,10 @@ export type MiniColumn<T> = {
   align?: "left" | "right";
 };
 
-/** Small fixed-order table for card bodies, where sorting and column picking add nothing. */
+/**
+ * Small fixed-order table for card bodies, where sorting and column picking
+ * add nothing. Sits flush with the card edges and scrolls past 28rem.
+ */
 export function MiniTable<T>({
   columns,
   rows,
@@ -143,15 +163,12 @@ export function MiniTable<T>({
   empty: string;
 }) {
   return (
-    <div className="-mx-5 -mb-5 overflow-x-auto">
+    <div className={cn(FLUSH, "max-h-[28rem] overflow-auto")}>
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-white/[0.06]">
             {columns.map((c) => (
-              <th
-                key={c.header}
-                className={cn("px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-ink-faint", c.align === "right" ? "text-right" : "text-left")}
-              >
+              <th key={c.header} className={cn("font-medium uppercase text-ink-faint", c.align === "right" ? "text-right" : "text-left")}>
                 {c.header}
               </th>
             ))}
@@ -160,7 +177,7 @@ export function MiniTable<T>({
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={columns.length} className="px-5 py-6 text-center text-sm text-ink-faint">
+              <td colSpan={columns.length} className="text-center text-ink-faint">
                 {empty}
               </td>
             </tr>
@@ -168,7 +185,7 @@ export function MiniTable<T>({
             rows.map((row) => (
               <tr key={rowKey(row)} className="border-b border-white/[0.04] text-ink-muted last:border-0">
                 {columns.map((c) => (
-                  <td key={c.header} className={cn("px-5 py-2.5", c.align === "right" && "text-right num")}>
+                  <td key={c.header} className={cn(c.align === "right" && "text-right num")}>
                     {c.cell(row)}
                   </td>
                 ))}

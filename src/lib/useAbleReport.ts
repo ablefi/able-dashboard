@@ -17,9 +17,15 @@ export function useAbleReport<T>(path: string, opts: { refreshMs?: number } = {}
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const inFlight = useRef(false);
+  // A refresh asked for while one is running (say right after a write) runs once
+  // the current one ends, so the page never keeps a copy older than the write.
+  const again = useRef(false);
 
-  const refresh = useCallback(async () => {
-    if (inFlight.current) return;
+  const refresh = useCallback(async (): Promise<void> => {
+    if (inFlight.current) {
+      again.current = true;
+      return;
+    }
     inFlight.current = true;
     setLoading(true);
     try {
@@ -35,6 +41,10 @@ export function useAbleReport<T>(path: string, opts: { refreshMs?: number } = {}
     } finally {
       inFlight.current = false;
       setLoading(false);
+    }
+    if (again.current) {
+      again.current = false;
+      await refresh();
     }
   }, [path, key]);
 
@@ -61,4 +71,20 @@ export async function searchAbleUsersByPhone<Row>(phone: string): Promise<Row[]>
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body?.error || `Search failed (${res.status})`);
   return (body?.users ?? []) as Row[];
+}
+
+/**
+ * Creator edit on Able's API through `/api/able/write` (scoped creators token).
+ * Throws with the API's own error message so forms can show it as is.
+ */
+export async function ableCreatorWrite<T = unknown>(method: "POST" | "DELETE", path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`/api/able/write?path=${encodeURIComponent(path)}`, {
+    method,
+    headers: method === "POST" ? { "Content-Type": "application/json" } : undefined,
+    body: method === "POST" ? JSON.stringify(body ?? {}) : undefined,
+    cache: "no-store",
+  });
+  const out = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(out?.error || `Request failed (${res.status})`);
+  return out as T;
 }

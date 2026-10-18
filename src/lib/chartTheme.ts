@@ -38,6 +38,10 @@ export const MONEY_IN = "var(--color-app-green)";
 export const MONEY_OUT = "var(--color-app-red-text)";
 export const ACCENT = "var(--color-app-blue-light)";
 
+/** Standard chart heights: a full panel and a compact one in a 3-up grid. */
+export const CHART_H = 200;
+export const CHART_H_SM = 160;
+
 export const axisProps = {
   tick: { fill: CHART.tick, fontSize: CHART.tickFont },
   tickLine: false,

@@ -29,7 +29,20 @@ import DataTable, { useTablePrefs, type Column } from "@/components/ui/DataTable
 import UserGlobe from "@/components/UserGlobe";
 import { useAbleReport } from "@/lib/useAbleReport";
 import { STAT_NEGATIVE, STAT_NEUTRAL, STAT_POSITIVE } from "@/lib/statColors";
-import { ACCENT, CHART, MONEY_IN, MONEY_OUT, SERIES, TOOLTIP_STYLE, axisProps, fmtInt } from "@/lib/chartTheme";
+import {
+  ACCENT,
+  CHART,
+  CHART_H,
+  CHART_H_SM,
+  MONEY_IN,
+  MONEY_OUT,
+  SERIES,
+  TOOLTIP_STYLE,
+  axisProps,
+  fmtInt,
+  fmtPct,
+  fmtUsd,
+} from "@/lib/chartTheme";
 import { regionFlag, regionName } from "@/lib/countries";
 import { cn } from "@/lib/utils";
 
@@ -358,7 +371,7 @@ function useHealthChecks() {
 
 // ---- formatting -----------------------------------------------------------------
 
-/** Up to `dp` decimals, grouped; the Ops page's fmt(). */
+/** Up to `dp` decimals, grouped. Used for USDT amounts and plain counts. */
 function fmt(n: number | null | undefined, dp = 2): string {
   if (n == null || !Number.isFinite(Number(n))) return "-";
   return Number(n).toLocaleString("en-US", { maximumFractionDigits: dp });
@@ -366,11 +379,21 @@ function fmt(n: number | null | undefined, dp = 2): string {
 
 const clock = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-/** "2026-10-02" (a UTC day) -> "Oct 2". The window is 30 days, so no year is needed. */
-const fmtDay = (d: string) =>
-  new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+/** "2026-10-02" (a UTC day) -> "Oct 2", or "Oct 2, 2026" when the series spans years. */
+const fmtDay = (d: string, withYear = false) =>
+  new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    ...(withYear ? { year: "numeric" as const } : {}),
+    timeZone: "UTC",
+  });
 
-const CHART_H = 240;
+const spansYears = (days: { date: string }[]) =>
+  days.length > 1 && days[0].date.slice(0, 4) !== days[days.length - 1].date.slice(0, 4);
+
+/** Share of a whole as "12.3%", "-" on an empty base. */
+const share = (part: number, whole: number) => (whole > 0 ? fmtPct((part / whole) * 100) : "-");
+
 const LINE_CURSOR = { stroke: "var(--color-rule-strong)", strokeWidth: 1 };
 
 const KYC_SLICES: { key: KycState; label: string; color: string }[] = [
@@ -382,38 +405,61 @@ const KYC_SLICES: { key: KycState; label: string; color: string }[] = [
   { key: "blocked", label: "Blocked", color: "var(--color-app-violet)" },
 ];
 
-// ---- small pieces -----------------------------------------------------------------
+/** Ledger rows on the Interlace card rail carry a provider-held USD balance, not wallet USDT. */
+const ledgerUnit = (type: string) => (type.startsWith("card_") ? "USD" : "USDT");
 
-function SectionHeading({ children }: { children: React.ReactNode }) {
-  return <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">{children}</h2>;
-}
+// ---- small pieces -----------------------------------------------------------------
 
 function Unit({ children }: { children: React.ReactNode }) {
   return <span className="ml-1 text-sm font-medium text-ink-faint">{children}</span>;
 }
 
-function StatusRow({ s, uptime }: { s: Service; uptime: number | null }) {
-  const right: string[] = [];
-  if (s.ms != null) right.push(`${fmt(s.ms, 0)} ms`);
-  if (uptime != null) right.push(`${uptime}% up`);
+const TH = "text-[11px] font-semibold uppercase tracking-wider text-ink-faint";
+
+function ServicesTable({ services, uptime }: { services: Service[]; uptime: Map<ServiceKey, number> }) {
   return (
-    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 border-b border-white/[0.06] py-2.5 last:border-b-0">
-      <span
-        aria-hidden
-        className={cn(
-          "h-2 w-2 shrink-0 translate-y-[-1px] self-center rounded-full",
-          s.ok === null ? "bg-ink-faint/50" : s.ok ? "bg-app-green" : "bg-app-red-text",
-        )}
-      />
-      <span className="w-40 shrink-0 text-sm font-medium text-ink">
-        {s.label}
-        <span className="sr-only">{s.ok === null ? ", not checked" : s.ok ? ", up" : ", down"}</span>
-      </span>
-      <span className="min-w-0 flex-1 text-xs text-ink-muted">
-        {s.ok === false && <span className="font-medium text-app-red-text">Down · </span>}
-        {s.sub}
-      </span>
-      {right.length > 0 && <span className="shrink-0 text-xs tabular-nums text-ink-faint">{right.join(" · ")}</span>}
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-white/[0.06] text-left">
+            <th className={cn(TH, "w-5")}>
+              <span className="sr-only">Status</span>
+            </th>
+            <th className={TH}>Service</th>
+            <th className={TH}>Detail</th>
+            <th className={cn(TH, "text-right")}>Latency ms</th>
+            <th className={cn(TH, "text-right")}>Uptime</th>
+          </tr>
+        </thead>
+        <tbody>
+          {services.map((s) => {
+            const up = uptime.get(s.key);
+            return (
+              <tr key={s.key} className="border-b border-white/[0.04] align-top text-ink-muted last:border-b-0">
+                <td>
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "mt-1.5 block h-2 w-2 rounded-full",
+                      s.ok === null ? "bg-ink-faint/50" : s.ok ? "bg-app-green" : "bg-app-red-text",
+                    )}
+                  />
+                </td>
+                <td className="whitespace-nowrap font-medium text-ink">
+                  {s.label}
+                  <span className="sr-only">{s.ok === null ? ", not checked" : s.ok ? ", up" : ", down"}</span>
+                </td>
+                <td className="text-xs">
+                  {s.ok === false && <span className="font-medium text-app-red-text">Down, </span>}
+                  {s.sub}
+                </td>
+                <td className="text-right num">{s.ms != null ? fmt(s.ms, 0) : "-"}</td>
+                <td className="text-right num">{up != null ? fmtPct(up) : "-"}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -430,25 +476,47 @@ function ChartEmpty({ height, title, description }: { height: number; title: str
 
 type LedgerRow = Stats["ledger"][number];
 type ReferralRow = Stats["referrals"][number];
+type CountryRow = { code: string; label: string; count: number; share: number };
 
 const LEDGER_COLUMNS: Column<LedgerRow>[] = [
-  { key: "type", header: "Type", width: 180, cell: (r) => <span className="font-mono text-xs text-ink">{r.type}</span>, sortValue: (r) => r.type },
-  { key: "count", header: "Entries", width: 110, align: "right", cell: (r) => <span className="num">{fmt(r.count, 0)}</span>, sortValue: (r) => r.count },
-  { key: "volume", header: "Volume USDT", width: 150, align: "right", cell: (r) => <span className="num text-ink">{fmt(r.volumeUsdt)}</span>, sortValue: (r) => r.volumeUsdt },
+  { key: "type", header: "Type", width: 140, cell: (r) => <span className="font-mono text-xs text-ink">{r.type}</span>, sortValue: (r) => r.type },
+  { key: "count", header: "Entries", width: 90, align: "right", cell: (r) => <span className="num">{fmtInt(r.count)}</span>, sortValue: (r) => r.count },
+  {
+    key: "volume",
+    header: "Volume",
+    width: 150,
+    align: "right",
+    cell: (r) => (
+      <span className="num text-ink">
+        {fmt(r.volumeUsdt)} <span className="text-ink-faint">{ledgerUnit(r.type)}</span>
+      </span>
+    ),
+    sortValue: (r) => r.volumeUsdt,
+  },
 ];
 
 const REFERRAL_COLUMNS: Column<ReferralRow>[] = [
-  { key: "code", header: "Code", width: 200, cell: (r) => <span className="font-mono text-xs text-ink">{r.code}</span>, sortValue: (r) => r.code },
-  { key: "count", header: "Signups", width: 110, align: "right", cell: (r) => <span className="num text-ink">{fmt(r.count, 0)}</span>, sortValue: (r) => r.count },
+  { key: "code", header: "Code", width: 180, cell: (r) => <span className="font-mono text-xs text-ink">{r.code}</span>, sortValue: (r) => r.code },
+  { key: "count", header: "Signups", width: 90, align: "right", cell: (r) => <span className="num text-ink">{fmtInt(r.count)}</span>, sortValue: (r) => r.count },
+];
+
+const COUNTRY_COLUMNS: Column<CountryRow>[] = [
+  { key: "country", header: "Country", width: 200, cell: (r) => <span className="text-ink" title={r.code}>{r.label}</span>, sortValue: (r) => r.label },
+  { key: "count", header: "Users", width: 90, align: "right", cell: (r) => <span className="num text-ink">{fmtInt(r.count)}</span>, sortValue: (r) => r.count },
+  { key: "share", header: "Share", width: 90, align: "right", cell: (r) => <span className="num">{fmtPct(r.share)}</span>, sortValue: (r) => r.share },
 ];
 
 // ---- page -------------------------------------------------------------------------
+
+const GRID_3 = "grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3";
+const GRID_2 = "grid grid-cols-1 gap-3 lg:grid-cols-2";
 
 export default function Overview() {
   const stats = useAbleReport<Stats>("/stats", { refreshMs: STATS_MS });
   const health = useHealthChecks();
   const ledgerPrefs = useTablePrefs("able-overview-ledger", LEDGER_COLUMNS);
   const refPrefs = useTablePrefs("able-overview-referrers", REFERRAL_COLUMNS);
+  const countryPrefs = useTablePrefs("able-overview-countries", COUNTRY_COLUMNS);
 
   const services = useMemo(() => (health.latest ? buildServices(health.latest) : []), [health.latest]);
 
@@ -481,21 +549,27 @@ export default function Overview() {
   const derived = useMemo(() => {
     if (!s) return null;
     const ledgerType = (t: string) => s.ledger.find((x) => x.type === t) ?? { count: 0, volumeUsdt: 0 };
-    const days = s.signupsByDay.map((d) => ({ date: d.date, label: fmtDay(d.date), count: d.count }));
-    const deposits = s.depositsByDay.map((d) => ({ label: fmtDay(d.date), usdt: d.usdt }));
-    const spend = (s.cardSpend?.byDay ?? []).map((d) => ({ label: fmtDay(d.date), usd: d.usd }));
+    const yearSig = spansYears(s.signupsByDay);
+    const yearDep = spansYears(s.depositsByDay);
+    const yearSpend = spansYears(s.cardSpend?.byDay ?? []);
+    const days = s.signupsByDay.map((d) => ({ date: d.date, label: fmtDay(d.date, yearSig), count: d.count }));
+    const deposits = s.depositsByDay.map((d) => ({ label: fmtDay(d.date, yearDep), usdt: d.usdt }));
+    const spend = (s.cardSpend?.byDay ?? []).map((d) => ({ label: fmtDay(d.date, yearSpend), usd: d.usd }));
     // Setup order in the app: deposit address or wallet -> provider account -> card -> funded.
     // Counts are actual user states, so a stage can exceed its predecessor.
     const funnel = [
       { stage: "Signed up", count: s.funnel.signedUp },
-      { stage: "Wallet linked", count: s.users.withDepositAddress },
+      { stage: "Deposit address", count: s.users.withDepositAddress },
       { stage: "Provider account", count: s.funnel.customerCreated },
-      { stage: "Card issued", count: s.funnel.cardIssued },
-      { stage: "Funded", count: s.funnel.funded },
+      { stage: "Has a card", count: s.funnel.cardIssued },
+      { stage: "Balance above 0", count: s.funnel.funded },
     ];
-    const countries = s.byCountry.slice(0, 8).map((c) => ({
+    const countryTotal = s.byCountry.reduce((n, c) => n + c.count, 0);
+    const countries: CountryRow[] = s.byCountry.map((c) => ({
+      code: c.code,
       label: `${regionFlag(c.code)} ${regionName(c.code) || c.code}`.trim(),
       count: c.count,
+      share: countryTotal > 0 ? (c.count / countryTotal) * 100 : 0,
     }));
     const kyc = KYC_SLICES.map((k) => ({ ...k, count: s.kyc?.[k.key] ?? 0 }));
     return {
@@ -530,11 +604,13 @@ export default function Overview() {
     healthUnreachable ? `Could not check service health: ${healthUnreachable}` : null,
   ].filter((e): e is string => Boolean(e));
 
+  const fade = cn("transition-opacity", stats.loading && "opacity-60");
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
       <PageHeader
-        title="Overview"
-        subtitle={stats.at ? `Updated ${clock(stats.at)}` : "Service health, money and users"}
+        title="Dashboard"
+        subtitle={stats.at ? `Updated ${clock(stats.at)}` : undefined}
         actions={
           <Button variant="secondary" size="sm" onClick={refresh} disabled={busy}>
             <RefreshCw className={cn("h-3.5 w-3.5", busy && "animate-spin")} /> Refresh
@@ -548,31 +624,80 @@ export default function Overview() {
         </div>
       ))}
 
-      {/* ---- Services ---- */}
-      <section className="space-y-3">
-        <SectionHeading>Services</SectionHeading>
+      {/* ---- Headline numbers ---- */}
+      {s && derived ? (
+        <div className={cn("app-stat-grid grid", fade)}>
+          <FinCard label="Users" valueClass={STAT_NEUTRAL} note={`+${fmtInt(s.users.newLast7d)} in last 7 days`}>
+            {fmtInt(s.users.total)}
+          </FinCard>
+          <FinCard label="Card provider accounts" valueClass={STAT_NEUTRAL} note={`${share(s.users.withCustomer, s.users.total)} of users`}>
+            {fmtInt(s.users.withCustomer)}
+          </FinCard>
+          <FinCard label="Users with a card" valueClass={STAT_NEUTRAL} note={`${share(s.users.withCard, s.users.total)} of users`}>
+            {fmtInt(s.users.withCard)}
+          </FinCard>
+          <FinCard label="Users with deposit address" valueClass={STAT_NEUTRAL} note={`${share(s.users.withDepositAddress, s.users.total)} of users`}>
+            {fmtInt(s.users.withDepositAddress)}
+          </FinCard>
+          <FinCard label="Wallet balances" valueClass={STAT_POSITIVE} note={`${fmtInt(s.balances.holders)} wallets above 0, excl. Interlace`}>
+            {fmt(s.balances.totalUsdt)}
+            <Unit>USDT</Unit>
+          </FinCard>
+          <FinCard label="Wallet deposits, all time" valueClass={STAT_POSITIVE} note={`${fmtInt(derived.dep.count)} deposits`}>
+            {fmt(derived.dep.volumeUsdt)}
+            <Unit>USDT</Unit>
+          </FinCard>
+          <FinCard label="Withdrawals, all time" valueClass={STAT_NEGATIVE} note={`${fmtInt(derived.out.count)} to external addresses`}>
+            {fmt(derived.out.volumeUsdt)}
+            <Unit>USDT</Unit>
+          </FinCard>
+          <FinCard
+            label="Net card spend, all time"
+            valueClass={STAT_NEGATIVE}
+            note={
+              `${fmtInt(s.cardSpend?.count ?? 0)} purchases` +
+              (s.cardSpend?.refundCount ? `, ${fmtUsd(s.cardSpend.refundUsd, 2)} refunded` : "")
+            }
+          >
+            {fmtUsd(s.cardSpend?.volumeUsd ?? 0, 2)}
+          </FinCard>
+        </div>
+      ) : stats.error ? (
+        <Empty compact title="Stats are unavailable" description="Refresh to try again." />
+      ) : (
+        <div className="flex items-center justify-center py-8 text-sm text-ink-muted">
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading stats…
+        </div>
+      )}
+
+      {/* ---- Services and latency ---- */}
+      <div className={GRID_2}>
         <Card
-          title="Status"
+          title="Services"
           actions={
             <>
-              {latest && <span className="text-xs text-ink-faint">Checked {clock(latest.at)}</span>}
+              {latest && <span className="text-[11px] text-ink-faint">Checked {clock(latest.at)}</span>}
               <Badge variant={overall.variant}>{overall.label}</Badge>
             </>
           }
-          bodyClassName="py-2"
+          bodyClassName="p-0"
         >
           {latest ? (
-            services.map((svc) => <StatusRow key={svc.key} s={svc} uptime={uptime.get(svc.key) ?? null} />)
+            <ServicesTable services={services} uptime={uptime} />
           ) : (
-            <div className="flex items-center justify-center py-10 text-sm text-ink-muted">
+            <div className="flex items-center justify-center py-6 text-sm text-ink-muted">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Checking services…
             </div>
           )}
+          <p className="border-t border-white/[0.06] px-3 py-1.5 text-[11px] text-ink-faint">
+            Latency and uptime cover this tab&apos;s checks since it opened. Immersve shows the shared upstream probe;
+            Sumsub is timed by the API.
+          </p>
         </Card>
 
-        <Card title="Latency (ms)" className="chart-card">
+        <Card title="Round-trip latency per check, this session (ms)" className="chart-card">
           {latency.length > 0 ? (
-            <ResponsiveContainer width="100%" height={170}>
+            <ResponsiveContainer width="100%" height={CHART_H}>
               <LineChart data={latency}>
                 <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
                 <XAxis
@@ -584,16 +709,16 @@ export default function Overview() {
                   minTickGap={40}
                   {...axisProps}
                 />
-                <YAxis width={44} allowDecimals={false} {...axisProps} />
+                <YAxis width={40} allowDecimals={false} {...axisProps} />
                 <Tooltip
                   {...TOOLTIP_STYLE}
                   cursor={LINE_CURSOR}
                   labelFormatter={(t: number) => clock(t)}
                   formatter={(v: number, name: string) => [`${fmt(v, 0)} ms`, name]}
                 />
-                <Legend wrapperStyle={{ fontSize: 11 }} iconType="plainline" align="right" verticalAlign="top" height={24} />
+                <Legend wrapperStyle={{ fontSize: 11 }} iconType="plainline" align="right" verticalAlign="top" height={20} />
                 <Line
-                  name="API"
+                  name="API /health"
                   type="monotone"
                   dataKey="api"
                   stroke={ACCENT}
@@ -603,7 +728,7 @@ export default function Overview() {
                   isAnimationActive={false}
                 />
                 <Line
-                  name="Upstream probe"
+                  name="Upstream probe, all providers"
                   type="monotone"
                   dataKey="upstream"
                   stroke={SERIES[0]}
@@ -615,265 +740,200 @@ export default function Overview() {
               </LineChart>
             </ResponsiveContainer>
           ) : (
-            <ChartEmpty height={170} title="Waiting for the first check" />
+            <ChartEmpty height={CHART_H} title="Waiting for the first check" />
           )}
-          <p className="mt-3 text-xs text-ink-faint">
-            Latency and uptime reflect the checks this browser tab has made since it opened, timed through the dashboard
-            server. They are not continuous server monitoring. The upstream probe is one request that checks every
-            provider at once.
-          </p>
         </Card>
-      </section>
+      </div>
 
-      {!s || !derived ? (
-        stats.error ? (
-          <Empty title="Stats are unavailable" description="Refresh to try again." />
-        ) : (
-          <div className="flex items-center justify-center py-24 text-ink-muted">
-            <Loader2 className="mr-2 h-6 w-6 animate-spin" /> Loading stats…
-          </div>
-        )
-      ) : (
-        <div className={cn("space-y-5", stats.loading ? "opacity-60 transition-opacity" : "transition-opacity")}>
-          {/* ---- Money ---- */}
-          <section className="space-y-3">
-            <SectionHeading>Money</SectionHeading>
-            <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-              <FinCard
-                label="User balances"
-                valueClass={STAT_POSITIVE}
-                note={`In ${fmt(s.balances.holders, 0)} user wallets, cached chain reads`}
-              >
-                {fmt(s.balances.totalUsdt)}
-                <Unit>USDT</Unit>
-              </FinCard>
-              <FinCard label="Deposits seen" valueClass={STAT_POSITIVE} note={`${fmt(derived.dep.count, 0)} on-chain deposits, all time`}>
-                {fmt(derived.dep.volumeUsdt)}
-                <Unit>USDT</Unit>
-              </FinCard>
-              <FinCard label="Withdrawals" valueClass={STAT_NEGATIVE} note={`${fmt(derived.out.count, 0)} user-signed transfers out`}>
-                {fmt(derived.out.volumeUsdt)}
-                <Unit>USDT</Unit>
-              </FinCard>
-              <FinCard
-                label="Card spend"
-                valueClass={STAT_NEGATIVE}
-                note={
-                  s.cardSpend && (s.cardSpend.count > 0 || s.cardSpend.refundCount > 0)
-                    ? `${fmt(s.cardSpend.count, 0)} purchases` +
-                      (s.cardSpend.refundCount ? `, ${fmt(s.cardSpend.refundUsd)} USD refunded` : "")
-                    : "No purchases yet"
-                }
-              >
-                {fmt(s.cardSpend?.volumeUsd ?? 0)}
-                <Unit>USD</Unit>
-              </FinCard>
-            </div>
-            <p className="text-xs text-ink-faint">
-              Able holds no customer money. Balances are each user&apos;s own wallet from cached chain reads and do not
-              include balances held at Interlace. Deposits are USDT transfers seen on chain. Card spend is in the card
-              currency, USD.
-            </p>
-          </section>
+      {s && derived && (
+        <div className={cn("space-y-3", fade)}>
+          {/* ---- Charts ---- */}
+          <div className={GRID_3}>
+            <Card title="Signups per day, last 30 days" className="chart-card">
+              <ResponsiveContainer width="100%" height={CHART_H_SM}>
+                <BarChart data={derived.days}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
+                  <XAxis dataKey="label" minTickGap={24} {...axisProps} />
+                  <YAxis width={32} allowDecimals={false} {...axisProps} />
+                  <Tooltip {...TOOLTIP_STYLE} formatter={(v: number) => [fmtInt(v), "Signups"]} />
+                  <Bar dataKey="count" fill={ACCENT} radius={[3, 3, 0, 0]} maxBarSize={12} isAnimationActive={false} />
+                </BarChart>
+              </ResponsiveContainer>
+            </Card>
 
-          {/* ---- Users ---- */}
-          <section className="space-y-3">
-            <SectionHeading>Users</SectionHeading>
-            <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-              <FinCard label="Total users" valueClass={STAT_NEUTRAL} note={`+${fmt(s.users.newLast7d, 0)} in the last 7 days`}>
-                {fmt(s.users.total, 0)}
-              </FinCard>
-              <FinCard label="Cards issued" valueClass={STAT_NEUTRAL} note={`${fmt(s.users.withCustomer, 0)} have a card provider account`}>
-                {fmt(s.users.withCard, 0)}
-              </FinCard>
-              <FinCard label="Funded users" valueClass={STAT_NEUTRAL} note={`${fmt(s.users.withDepositAddress, 0)} have a wallet linked`}>
-                {fmt(s.users.funded, 0)}
-              </FinCard>
-              <FinCard label="Total balances" valueClass={STAT_POSITIVE} note={`Across ${fmt(s.balances.holders, 0)} funded users`}>
-                {fmt(s.balances.totalUsdt)}
-                <Unit>USDT</Unit>
-              </FinCard>
-            </div>
+            <Card title="Wallet deposits per day, last 30 days (USDT)" className="chart-card">
+              <ResponsiveContainer width="100%" height={CHART_H_SM}>
+                <AreaChart data={derived.deposits}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
+                  <XAxis dataKey="label" minTickGap={24} {...axisProps} />
+                  <YAxis width={48} {...axisProps} tickFormatter={(v: number) => fmt(v, 0)} />
+                  <Tooltip {...TOOLTIP_STYLE} cursor={LINE_CURSOR} formatter={(v: number) => [`${fmt(v)} USDT`, "Deposits"]} />
+                  <Area
+                    type="monotone"
+                    dataKey="usdt"
+                    stroke={MONEY_IN}
+                    fill={MONEY_IN}
+                    fillOpacity={0.1}
+                    strokeWidth={2}
+                    isAnimationActive={false}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </Card>
 
-            <UserGlobe countries={s.byCountry} />
-
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              <Card title="Signups per day, last 30 days" className="chart-card">
-                <ResponsiveContainer width="100%" height={CHART_H}>
-                  <BarChart data={derived.days}>
+            <Card title="Net card spend per day, last 30 days (USD)" className="chart-card">
+              {derived.spend.length > 0 ? (
+                <ResponsiveContainer width="100%" height={CHART_H_SM}>
+                  <AreaChart data={derived.spend}>
                     <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
                     <XAxis dataKey="label" minTickGap={24} {...axisProps} />
-                    <YAxis width={36} allowDecimals={false} {...axisProps} />
-                    <Tooltip {...TOOLTIP_STYLE} formatter={(v: number) => [fmtInt(v), "Signups"]} />
-                    <Bar dataKey="count" fill={ACCENT} radius={[4, 4, 0, 0]} maxBarSize={14} isAnimationActive={false} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </Card>
-
-              <Card title="Deposit volume per day (USDT)" className="chart-card">
-                <ResponsiveContainer width="100%" height={CHART_H}>
-                  <AreaChart data={derived.deposits}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
-                    <XAxis dataKey="label" minTickGap={24} {...axisProps} />
-                    <YAxis width={52} {...axisProps} tickFormatter={(v: number) => fmt(v, 0)} />
-                    <Tooltip {...TOOLTIP_STYLE} cursor={LINE_CURSOR} formatter={(v: number) => [`${fmt(v)} USDT`, "Deposits"]} />
+                    <YAxis width={48} {...axisProps} tickFormatter={(v: number) => fmtUsd(v)} />
+                    <Tooltip {...TOOLTIP_STYLE} cursor={LINE_CURSOR} formatter={(v: number) => [fmtUsd(v, 2), "Card spend"]} />
                     <Area
                       type="monotone"
-                      dataKey="usdt"
-                      stroke={MONEY_IN}
-                      fill={MONEY_IN}
+                      dataKey="usd"
+                      stroke={MONEY_OUT}
+                      fill={MONEY_OUT}
                       fillOpacity={0.1}
                       strokeWidth={2}
                       isAnimationActive={false}
                     />
                   </AreaChart>
                 </ResponsiveContainer>
-              </Card>
+              ) : (
+                <ChartEmpty height={CHART_H_SM} title="No purchases yet" />
+              )}
+            </Card>
 
-              <Card title="Card spend per day (USD)" className="chart-card">
-                {derived.spend.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={CHART_H}>
-                    <AreaChart data={derived.spend}>
-                      <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
-                      <XAxis dataKey="label" minTickGap={24} {...axisProps} />
-                      <YAxis width={52} {...axisProps} tickFormatter={(v: number) => fmt(v, 0)} />
-                      <Tooltip {...TOOLTIP_STYLE} cursor={LINE_CURSOR} formatter={(v: number) => [`${fmt(v)} USD`, "Card spend"]} />
-                      <Area
-                        type="monotone"
-                        dataKey="usd"
-                        stroke={MONEY_OUT}
-                        fill={MONEY_OUT}
-                        fillOpacity={0.1}
-                        strokeWidth={2}
-                        isAnimationActive={false}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <ChartEmpty height={CHART_H} title="No purchases yet" />
-                )}
-              </Card>
+            <Card title="Users by card setup stage, current state" className="chart-card">
+              <ResponsiveContainer width="100%" height={CHART_H_SM}>
+                <BarChart data={derived.funnel} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} horizontal={false} />
+                  <XAxis type="number" allowDecimals={false} {...axisProps} />
+                  <YAxis dataKey="stage" type="category" width={104} interval={0} {...axisProps} />
+                  <Tooltip {...TOOLTIP_STYLE} formatter={(v: number) => [fmtInt(v), "Users"]} />
+                  <Bar dataKey="count" fill={ACCENT} radius={[0, 3, 3, 0]} maxBarSize={16} isAnimationActive={false} />
+                </BarChart>
+              </ResponsiveContainer>
+            </Card>
 
-              <Card title="Card setup funnel" className="chart-card">
-                <ResponsiveContainer width="100%" height={CHART_H}>
-                  <BarChart data={derived.funnel} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} horizontal={false} />
-                    <XAxis type="number" allowDecimals={false} {...axisProps} />
-                    <YAxis dataKey="stage" type="category" width={112} {...axisProps} />
+            <Card title="Users by card provider KYC state" className="chart-card">
+              {derived.kycTotal > 0 ? (
+                <div className="flex items-center gap-4" style={{ height: CHART_H_SM }}>
+                  <div className="shrink-0" style={{ width: CHART_H_SM, height: CHART_H_SM }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={derived.kyc.filter((k) => k.count > 0)}
+                          dataKey="count"
+                          nameKey="label"
+                          innerRadius={50}
+                          outerRadius={74}
+                          stroke="var(--color-app-navy-card)"
+                          strokeWidth={2}
+                          isAnimationActive={false}
+                        >
+                          {derived.kyc
+                            .filter((k) => k.count > 0)
+                            .map((k) => (
+                              <Cell key={k.key} fill={k.color} />
+                            ))}
+                        </Pie>
+                        <Tooltip {...TOOLTIP_STYLE} formatter={(v: number, name: string) => [fmtInt(v), name]} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <ul className="min-w-0 flex-1 space-y-1 text-xs">
+                    {derived.kyc.map((k) => (
+                      <li key={k.key} className="flex items-center gap-2">
+                        <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: k.color }} />
+                        <span className="min-w-0 flex-1 truncate text-ink-muted">{k.label}</span>
+                        <span className="num text-ink">{fmtInt(k.count)}</span>
+                        <span className="w-12 text-right text-ink-faint num">{share(k.count, derived.kycTotal)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <ChartEmpty height={CHART_H_SM} title="No users yet" />
+              )}
+            </Card>
+
+            <Card title="Users by age band, with a date of birth" className="chart-card">
+              {s.ageBands.length > 0 ? (
+                <ResponsiveContainer width="100%" height={CHART_H_SM}>
+                  <BarChart data={s.ageBands}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
+                    <XAxis dataKey="band" interval={0} {...axisProps} />
+                    <YAxis width={32} allowDecimals={false} {...axisProps} />
                     <Tooltip {...TOOLTIP_STYLE} formatter={(v: number) => [fmtInt(v), "Users"]} />
-                    <Bar dataKey="count" fill={ACCENT} radius={[0, 4, 4, 0]} maxBarSize={18} isAnimationActive={false} />
+                    <Bar dataKey="count" fill={ACCENT} radius={[3, 3, 0, 0]} maxBarSize={22} isAnimationActive={false} />
                   </BarChart>
                 </ResponsiveContainer>
-              </Card>
+              ) : (
+                <ChartEmpty height={CHART_H_SM} title="No dates of birth yet" />
+              )}
+            </Card>
+          </div>
 
-              <Card title="Signups by country" className="chart-card">
-                {derived.countries.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={CHART_H}>
-                    <BarChart data={derived.countries} layout="vertical">
-                      <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} horizontal={false} />
-                      <XAxis type="number" allowDecimals={false} {...axisProps} />
-                      <YAxis dataKey="label" type="category" width={150} interval={0} {...axisProps} />
-                      <Tooltip {...TOOLTIP_STYLE} formatter={(v: number) => [fmtInt(v), "Signups"]} />
-                      <Bar dataKey="count" fill={ACCENT} radius={[0, 4, 4, 0]} maxBarSize={18} isAnimationActive={false} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <ChartEmpty height={CHART_H} title="No signups yet" />
-                )}
-              </Card>
+          {/* ---- Geography ---- */}
+          <div className={GRID_2}>
+            <UserGlobe countries={s.byCountry} compact title="Users by country of residence, map" />
 
-              <Card title="KYC states" className="chart-card">
-                {derived.kycTotal > 0 ? (
-                  <div className="flex flex-wrap items-center justify-center gap-6" style={{ minHeight: CHART_H }}>
-                    <div className="h-[200px] w-[200px] shrink-0">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={derived.kyc.filter((k) => k.count > 0)}
-                            dataKey="count"
-                            nameKey="label"
-                            innerRadius={64}
-                            outerRadius={92}
-                            stroke="var(--color-app-navy-card)"
-                            strokeWidth={2}
-                            isAnimationActive={false}
-                          >
-                            {derived.kyc
-                              .filter((k) => k.count > 0)
-                              .map((k) => (
-                                <Cell key={k.key} fill={k.color} />
-                              ))}
-                          </Pie>
-                          <Tooltip {...TOOLTIP_STYLE} formatter={(v: number, name: string) => [fmtInt(v), name]} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </div>
-                    <ul className="min-w-[160px] space-y-2 text-xs">
-                      {derived.kyc.map((k) => (
-                        <li key={k.key} className="flex items-center justify-between gap-4">
-                          <span className="flex items-center gap-2 text-ink-muted">
-                            <span aria-hidden className="h-2 w-2 rounded-full" style={{ backgroundColor: k.color }} />
-                            {k.label}
-                          </span>
-                          <span className="tabular-nums text-ink">{fmt(k.count, 0)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : (
-                  <ChartEmpty height={CHART_H} title="No users yet" />
-                )}
-              </Card>
+            <Card title={`Users by country of residence, ${fmtInt(derived.countries.length)} countries`} bodyClassName="p-0">
+              {derived.countries.length > 0 ? (
+                <DataTable
+                  columns={COUNTRY_COLUMNS}
+                  rows={derived.countries}
+                  rowKey={(r) => r.code}
+                  hidden={countryPrefs.hidden}
+                  widths={countryPrefs.widths}
+                  setWidths={countryPrefs.setWidths}
+                  defaultSort={{ key: "count", dir: "desc" }}
+                  className="max-h-[22rem]"
+                />
+              ) : (
+                <Empty compact title="No signups yet" />
+              )}
+            </Card>
+          </div>
 
-              <Card title="Age bands" className="chart-card">
-                {s.ageBands.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={CHART_H}>
-                    <BarChart data={s.ageBands}>
-                      <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
-                      <XAxis dataKey="band" {...axisProps} />
-                      <YAxis width={36} allowDecimals={false} {...axisProps} />
-                      <Tooltip {...TOOLTIP_STYLE} formatter={(v: number) => [fmtInt(v), "Users"]} />
-                      <Bar dataKey="count" fill={ACCENT} radius={[4, 4, 0, 0]} maxBarSize={24} isAnimationActive={false} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <ChartEmpty height={CHART_H} title="No dates of birth yet" />
-                )}
-              </Card>
+          {/* ---- Tables ---- */}
+          <div className={GRID_2}>
+            <Card title="Ledger entries by type, all time, excluding failed" bodyClassName="p-0">
+              {s.ledger.length > 0 ? (
+                <DataTable
+                  columns={LEDGER_COLUMNS}
+                  rows={s.ledger}
+                  rowKey={(r) => r.type}
+                  hidden={ledgerPrefs.hidden}
+                  widths={ledgerPrefs.widths}
+                  setWidths={ledgerPrefs.setWidths}
+                  defaultSort={{ key: "volume", dir: "desc" }}
+                  className="max-h-[28rem]"
+                />
+              ) : (
+                <Empty compact title="No ledger activity yet" />
+              )}
+            </Card>
 
-              <Card title="Ledger volume by type" bodyClassName="p-0">
-                {s.ledger.length > 0 ? (
-                  <DataTable
-                    columns={LEDGER_COLUMNS}
-                    rows={s.ledger}
-                    rowKey={(r) => r.type}
-                    hidden={ledgerPrefs.hidden}
-                    widths={ledgerPrefs.widths}
-                    setWidths={ledgerPrefs.setWidths}
-                    defaultSort={{ key: "volume", dir: "desc" }}
-                  />
-                ) : (
-                  <Empty compact title="No ledger activity yet" />
-                )}
-              </Card>
-
-              <Card title="Top referrers" bodyClassName="p-0">
-                {s.referrals.length > 0 ? (
-                  <DataTable
-                    columns={REFERRAL_COLUMNS}
-                    rows={s.referrals}
-                    rowKey={(r) => r.code}
-                    hidden={refPrefs.hidden}
-                    widths={refPrefs.widths}
-                    setWidths={refPrefs.setWidths}
-                    defaultSort={{ key: "count", dir: "desc" }}
-                  />
-                ) : (
-                  <Empty compact title="No referrals yet" />
-                )}
-              </Card>
-            </div>
-          </section>
+            <Card title="Top 10 invite codes by signups" bodyClassName="p-0">
+              {s.referrals.length > 0 ? (
+                <DataTable
+                  columns={REFERRAL_COLUMNS}
+                  rows={s.referrals}
+                  rowKey={(r) => r.code}
+                  hidden={refPrefs.hidden}
+                  widths={refPrefs.widths}
+                  setWidths={refPrefs.setWidths}
+                  defaultSort={{ key: "count", dir: "desc" }}
+                  className="max-h-[28rem]"
+                />
+              ) : (
+                <Empty compact title="No referrals yet" />
+              )}
+            </Card>
+          </div>
         </div>
       )}
     </div>

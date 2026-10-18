@@ -164,3 +164,107 @@ export function updatedLabel(at: number | null): string | undefined {
   if (!at) return undefined;
   return `Updated ${new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
 }
+
+/** What feeds a creator's counted posts and views (postCounts in apps/api/src/creators.ts). */
+export const KIND_RULE: Record<CreatorKind, string> = {
+  influencer: "Counts approved posts only: an @mention of our account or approved by hand.",
+  youtuber: "Counts approved videos only: an @mention of our account or approved by hand.",
+  ugc: "Counts every post that is not excluded.",
+  brand: "Our own account. Counts every post that is not excluded.",
+};
+
+export const CREATOR_KINDS: CreatorKind[] = ["influencer", "youtuber", "ugc", "brand"];
+export const CREATOR_STATUSES: CreatorStatus[] = ["active", "paused", "ended"];
+
+export const STATUS_BADGE: Record<CreatorStatus, "success" | "warning" | "default"> = {
+  active: "success",
+  paused: "warning",
+  ended: "default",
+};
+
+/** Today as a UTC calendar day, YYYY-MM-DD. */
+export function todayUtc(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** Monday-start UTC week of an ISO timestamp, as YYYY-MM-DD (weekUtc in the API). */
+export function weekStartUtc(iso: string): string {
+  const d = new Date(iso);
+  const monday = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - ((d.getUTCDay() + 6) % 7)));
+  return monday.toISOString().slice(0, 10);
+}
+
+/** Scraped, not approved, not excluded, and approval decides whether it counts. */
+export const isPendingPost = (p: CreatorReportPost) => !p.approved && !p.excluded && !p.counts && !p.community;
+
+/** One word for how a post stands under the counting rules. */
+export function postState(p: CreatorReportPost): "Excluded" | "Counted" | "Community" | "Pending" | "Not counted" {
+  if (p.excluded) return "Excluded";
+  if (p.counts) return "Counted";
+  if (p.community) return "Community";
+  return isPendingPost(p) ? "Pending" : "Not counted";
+}
+
+/** A post is an outlier when its views are at least this multiple of its creator's median. */
+export const OUTLIER_MULTIPLE = 3;
+export const OUTLIER_RULE =
+  "Views at least 3 times the creator's median views across their scraped posts in the last 90 days. YouTube community posts have no views and are left out.";
+
+/** Median views per creator over their scraped posts that carry a view count. */
+export function medianViewsByCreator(posts: CreatorReportPost[]): Map<string, number> {
+  const views = new Map<string, number[]>();
+  for (const p of posts) {
+    if (p.community) continue;
+    (views.get(p.creatorId) ?? views.set(p.creatorId, []).get(p.creatorId)!).push(p.viewCount);
+  }
+  const out = new Map<string, number>();
+  for (const [id, list] of views) {
+    const s = [...list].sort((a, b) => a - b);
+    const mid = Math.floor(s.length / 2);
+    out.set(id, s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2);
+  }
+  return out;
+}
+
+/** Views as a multiple of the creator's median, when the post is an outlier. */
+export function outlierMultiple(p: CreatorReportPost, medians: Map<string, number>): number | null {
+  if (p.community) return null;
+  const median = medians.get(p.creatorId);
+  if (!median || median <= 0) return null;
+  const x = p.viewCount / median;
+  return x >= OUTLIER_MULTIPLE ? x : null;
+}
+
+/** Body of POST /creators. feeCents is integer USD cents. */
+export interface CreatorWriteBody {
+  id?: string;
+  name: string;
+  kind: CreatorKind;
+  status: CreatorStatus;
+  instagramHandle: string;
+  tiktokHandle: string;
+  youtubeHandle: string;
+  codes: string[];
+  feeCents: number;
+  dealNotes: string;
+  startedAt: string;
+}
+
+/** POST /creators/<id>/refresh returns errors; POST /creators/refresh returns creators and failed. */
+export interface FeedRefreshResult {
+  creators?: number;
+  inserted: number;
+  updated: number;
+  failed?: number;
+  errors?: string[];
+}
+
+export type PostFlagAction = "approve" | "unapprove" | "exclude" | "restore";
+
+/** Same bodies the old Ops page sent: excluding also clears approval. */
+export function postFlagBody(action: PostFlagAction): { approved?: boolean; excluded?: boolean } {
+  if (action === "approve") return { approved: true };
+  if (action === "unapprove") return { approved: false };
+  if (action === "exclude") return { excluded: true, approved: false };
+  return { excluded: false };
+}

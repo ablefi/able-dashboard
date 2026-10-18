@@ -33,12 +33,35 @@ export const ABLE_READS: Record<string, string> = {
 /** The one allowed POST: exact phone lookup, returns masked roster rows. */
 export const ABLE_PHONE_SEARCH = "/marketing/users/search";
 
+/**
+ * Creator writes, the only mutations this dashboard makes. They use the API's
+ * scoped CREATORS_API_TOKEN, which the API accepts on exactly these five routes
+ * (access 'creators-write' in apps/api/src/admin.ts) and nowhere else. The
+ * allowlist is repeated here so a bad path never leaves this server.
+ */
+const ID = "[A-Za-z0-9_-]{1,64}";
+const CREATOR_WRITES: { method: "POST" | "DELETE"; re: RegExp }[] = [
+  { method: "POST", re: /^\/creators$/ },
+  { method: "POST", re: /^\/creators\/refresh$/ },
+  { method: "POST", re: new RegExp(`^/creators/${ID}/refresh$`) },
+  { method: "POST", re: new RegExp(`^/creators/posts/${ID}$`) },
+  { method: "DELETE", re: new RegExp(`^/creators/${ID}$`) },
+];
+
+export function isCreatorWrite(method: string, path: string): boolean {
+  return CREATOR_WRITES.some((w) => w.method === method && w.re.test(path));
+}
+
 export type AbleResult = { status: number; body: string };
 
-export async function ableFetch(path: string, init?: { method: "GET" | "POST"; body?: string }): Promise<AbleResult> {
-  const token = (process.env.API_TOKEN || "").trim();
+export async function ableFetch(
+  path: string,
+  init?: { method: "GET" | "POST" | "DELETE"; body?: string; creatorsWrite?: boolean; timeoutMs?: number },
+): Promise<AbleResult> {
+  const envName = init?.creatorsWrite ? "CREATORS_API_TOKEN" : "API_TOKEN";
+  const token = (process.env[envName] || "").trim();
   if (!token) {
-    return { status: 503, body: JSON.stringify({ error: "API_TOKEN is not set on this deployment." }) };
+    return { status: 503, body: JSON.stringify({ error: `${envName} is not set on this deployment.` }) };
   }
   try {
     const res = await fetch(ABLE_API_BASE + path, {
@@ -50,13 +73,15 @@ export async function ableFetch(path: string, init?: { method: "GET" | "POST"; b
       body: init?.body,
       cache: "no-store",
       // Under the route's maxDuration; /health/upstream waits on providers and the chain RPC.
-      signal: AbortSignal.timeout(50_000),
+      signal: AbortSignal.timeout(init?.timeoutMs ?? 50_000),
     });
     if (res.status === 401 || res.status === 403) {
       return {
         status: 502,
         body: JSON.stringify({
-          error: "Able's API rejected the dashboard token. Set API_TOKEN to the API's DASHBOARD_API_TOKEN.",
+          error: init?.creatorsWrite
+            ? "Able's API rejected the creators token. Set CREATORS_API_TOKEN to the API's CREATORS_API_TOKEN."
+            : "Able's API rejected the dashboard token. Set API_TOKEN to the API's DASHBOARD_API_TOKEN.",
         }),
       };
     }

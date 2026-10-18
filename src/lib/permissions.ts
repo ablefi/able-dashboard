@@ -106,7 +106,7 @@ export const PERMISSION_GROUPS: Record<string, { label: string; pages: string }>
   reviews: { label: "App Store Reviews", pages: "Growth → App Store Reviews" },
   "referral-codes": { label: "Referral Codes", pages: "Referral Codes and Code Analytics" },
   compliance: { label: "Compliance", pages: "Users → Compliance" },
-  marketing: { label: "Marketing reports", pages: "Users → Users, Growth → Growth, Activation, Referrals and Card spend" },
+  marketing: { label: "Marketing reports", pages: "Users → Users, Growth → Growth and Money" },
   giving: { label: "Giving", pages: "Giving" },
 };
 
