@@ -103,9 +103,24 @@ function fallbackCells(geo: Payload | null, mode: "paying" | "all"): GeoCell[] {
   return [...byCode.values()];
 }
 
-export default function UserGlobe() {
-  const [geo, setGeo] = useState<Payload | null>(null);
-  const [mode, setMode] = useState<Mode>("paying");
+/** Signups per ISO alpha-2 country, the shape of Able's `/stats` byCountry. */
+export type CountryCount = { code: string; count: number };
+
+/**
+ * With `countries`, the globe draws that tally (at country centroids, every
+ * user, no paying split) and skips the User Analysis payload entirely.
+ */
+export default function UserGlobe({ countries: provided }: { countries?: CountryCount[] } = {}) {
+  const external = provided !== undefined;
+  const [fetched, setGeo] = useState<Payload | null>(null);
+  const geo = useMemo<Payload | null>(() => {
+    if (!provided) return fetched;
+    const tallies = provided.map((c) => ({ code: c.code, name: regionName(c.code) || c.code, count: c.count }));
+    return { countries: tallies, paying: [], total: tallies.reduce((n, c) => n + c.count, 0) };
+  }, [provided, fetched]);
+  const [modeChoice, setMode] = useState<Mode>("paying");
+  // An external tally has no paying split, so it is always shown as all users.
+  const mode: Mode = external ? "all" : modeChoice;
   const axios = useAxios();
   const [source, setSource] = useState<"server" | "local" | null>(null);
   const [hover, setHover] = useState<Country | null>(null);
@@ -136,6 +151,7 @@ export default function UserGlobe() {
   // Prefer the centrally-stored tally so this works on any machine; fall back
   // to whatever this browser happens to have cached from a local crawl.
   useEffect(() => {
+    if (external) return;
     let cancelled = false;
     (async () => {
       try {
@@ -186,7 +202,7 @@ export default function UserGlobe() {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [external]);
 
   /**
    * Cells for the current mode, with their trig precomputed.
@@ -538,7 +554,7 @@ export default function UserGlobe() {
   const subtitle = loading
     ? "Loading…"
     : empty
-      ? "Run User Analysis to fill this in"
+      ? (external ? "No signups yet" : "Run User Analysis to fill this in")
       : hasRealCells && denominator > 0
         ? `${located.toLocaleString()} of ${denominator.toLocaleString()} ${mode === "paying" ? "paying users" : "users"} located · ${countries.length} countries`
         : `${listed.toLocaleString()} ${mode === "paying" ? "paying users" : "users"} · ${countries.length} countries`;
@@ -567,6 +583,7 @@ export default function UserGlobe() {
               </button>
             ))}
           </div>
+          {!external && (
           <div className="inline-flex gap-1 rounded-lg border border-white/[0.08] bg-app-navy-card/60 p-0.5">
             {(["paying", "all"] as const).map((m) => (
               <button
@@ -581,6 +598,7 @@ export default function UserGlobe() {
               </button>
             ))}
           </div>
+          )}
           </div>
         )}
       </div>
@@ -595,7 +613,9 @@ export default function UserGlobe() {
           <div className="flex h-[460px] flex-col items-center justify-center gap-2 text-ink-faint">
             <Globe2 className="h-8 w-8 opacity-40" />
             <p className="max-w-xs text-center text-xs">
-              Open User Analysis once and this fills in, it reuses the location data from that crawl.
+              {external
+                ? "No signups yet. Countries appear here as people sign up."
+                : "Open User Analysis once and this fills in, it reuses the location data from that crawl."}
             </p>
           </div>
         ) : (
@@ -671,9 +691,11 @@ export default function UserGlobe() {
                   ? `${byGps.toLocaleString()} placed by device location, the rest by timezone (hollow dots)`
                   : "Solid dots are device location, hollow dots are placed by timezone") +
                 (dropped > 0 ? ` · ${dropped.toLocaleString()} in dots too small to draw` : "")
-              : "Approximate country positions until the next User Analysis run"}
+              : external
+                ? "Dots sit at the centre of each signup country"
+                : "Approximate country positions until the next User Analysis run"}
           </span>
-          <span>{source === "local" ? "from this browser's last analysis" : "updated with User Analysis"}</span>
+          <span>{external ? "from the country chosen at signup" : source === "local" ? "from this browser's last analysis" : "updated with User Analysis"}</span>
         </div>
       )}
     </div>

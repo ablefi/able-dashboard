@@ -1,8 +1,5 @@
 {
-  "crons": [
-    {
-      "path": "/api/cron/refresh-all",
-      "schedule": "0 */8 * * *"
-    }
-  ]
+  "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next"
 }

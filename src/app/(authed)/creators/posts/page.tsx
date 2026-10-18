@@ -1,6 +1,5 @@
-import Posts from "@/views/Posts";
+import Posts from "@/views/able/Posts";
 
-export default async function CreatorPostsPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
-  const { view } = await searchParams;
-  return <Posts initialView={view === "outliers" ? "outliers" : "posts"} />;
+export default function PostsPage() {
+  return <Posts />;
 }

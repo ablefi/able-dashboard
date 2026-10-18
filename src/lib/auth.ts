@@ -87,16 +87,19 @@ interface TokenPayload {
  *
  * When DASHBOARD_PASSWORD is set, the login form checks it here instead of
  * forwarding to the backend. The session holds no backend token, so it can
- * only reach sections served by our own Supabase routes. Backend sections
- * (users, referral codes, admins) and App Store reviews stay hidden until the
- * backend admin endpoints exist and this variable is removed.
+ * only reach our own server routes: Supabase pages and the read-only Able API
+ * reports (lib/ableApi.ts). Backend admin sections (accounts, referral codes,
+ * admins) and App Store reviews stay hidden until the backend admin endpoints
+ * exist and this variable is removed.
  */
 export const LOCAL_PERMISSIONS = [
   "dashboard:read",
   "creators:read",
-  "creators:write",
   "social:read",
   "research:read",
+  "compliance:read",
+  "marketing:read",
+  "giving:read",
 ];
 
 export function passwordLoginEnabled(): boolean {

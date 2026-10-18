@@ -1,5 +1,5 @@
-import Dashboard from "@/views/Dashboard";
+import Overview from "@/views/able/Overview";
 
 export default function DashboardPage() {
-  return <Dashboard />;
+  return <Overview />;
 }

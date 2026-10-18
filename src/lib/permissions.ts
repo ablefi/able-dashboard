@@ -67,6 +67,10 @@ export const SECTION_PERMISSIONS: Record<string, string[]> = {
   social: ["social:read"],
   research: ["research:read"],
   creators: ["creators:read"],
+  // Able API reports (see lib/ableApi.ts).
+  compliance: ["compliance:read"],
+  marketing: ["marketing:read"],
+  giving: ["giving:read"],
   admins: ["admins:read"],
 };
 
@@ -79,6 +83,9 @@ export const CUSTOM_PERMISSIONS: { key: string; description: string }[] = [
   { key: "research:read", description: "Prospects and Competitors" },
   { key: "reviews:read", description: "App Store review approval queue" },
   { key: "reviews:write", description: "Approve, edit and post review replies" },
+  { key: "compliance:read", description: "Compliance: masked user, device and sign-in history" },
+  { key: "marketing:read", description: "User roster, growth, activation, referrals and card spend reports" },
+  { key: "giving:read", description: "Giving points report and monthly statement" },
 ];
 
 /** Can this admin open this section at all? */
@@ -98,6 +105,9 @@ export const PERMISSION_GROUPS: Record<string, { label: string; pages: string }>
   research: { label: "Prospects and Competitors", pages: "Creators → Prospects, Growth → Competitors" },
   reviews: { label: "App Store Reviews", pages: "Growth → App Store Reviews" },
   "referral-codes": { label: "Referral Codes", pages: "Referral Codes and Code Analytics" },
+  compliance: { label: "Compliance", pages: "Users → Compliance" },
+  marketing: { label: "Marketing reports", pages: "Users → Users, Growth → Growth, Activation, Referrals and Card spend" },
+  giving: { label: "Giving", pages: "Giving" },
 };
 
 /** Include new backend resources in the catalog setup, as well as our own keys. */

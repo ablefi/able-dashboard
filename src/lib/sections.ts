@@ -17,6 +17,9 @@ export type SectionKey =
   | "research"
   | "creators"
   | "growth"
+  | "compliance"
+  | "marketing"
+  | "giving"
   | "admins";
 
 export const SECTIONS: { key: SectionKey; label: string; backend: boolean }[] = [
@@ -32,6 +35,11 @@ export const SECTIONS: { key: SectionKey; label: string; backend: boolean }[] = 
   // (force-update minimums today, more later).
   // Outward-facing measurement: store reviews and site traffic.
   { key: "growth", label: "Growth", backend: true },
+  // Reports from Able's API, read server-side through /api/able with the
+  // deployment's dashboard token, so the browser never needs a backend token.
+  { key: "compliance", label: "Compliance", backend: false },
+  { key: "marketing", label: "Marketing", backend: false },
+  { key: "giving", label: "Giving", backend: false },
   // Managing admin accounts and the permission catalog.
   { key: "admins", label: "Admins", backend: true },
 ];
@@ -55,6 +63,13 @@ const PATH_SECTION: { prefix: string; section: string }[] = [
   { prefix: "/website", section: "social:read" },
   { prefix: "/prospects", section: "research:read" },
   { prefix: "/competitors", section: "research:read" },
+  { prefix: "/roster", section: "marketing" },
+  { prefix: "/growth", section: "marketing" },
+  { prefix: "/activation", section: "marketing" },
+  { prefix: "/referrals", section: "marketing" },
+  { prefix: "/card-spend", section: "marketing" },
+  { prefix: "/compliance", section: "compliance" },
+  { prefix: "/giving", section: "giving" },
   { prefix: "/admins", section: "admins" },
 ];
 

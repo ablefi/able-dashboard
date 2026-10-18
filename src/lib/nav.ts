@@ -13,8 +13,9 @@
 import { sectionForPath } from "@/lib/sections";
 
 import {
-  LayoutDashboard, Users, Gift, Users2, MessageSquare, UserSearch,
-  Globe, Crosshair, BarChart3, FileText, CalendarDays, ShieldCheck, Trophy,
+  LayoutDashboard, Users, Gift, Users2, MessageSquare,
+  Globe, Crosshair, BarChart3, FileText, ShieldCheck, Trophy,
+  Fingerprint, TrendingUp, Filter, Share2, CreditCard, HeartHandshake, UserCog,
 } from "lucide-react";
 
 export type NavIcon = typeof Users;
@@ -35,27 +36,38 @@ export const NAV: Node[] = [
   {
     kind: "section", id: "users", label: "Users", icon: Users,
     items: [
-      { href: "/users", label: "Users", icon: Users },
+      // Able API reports (lib/ableApi.ts).
+      { href: "/roster", label: "Users", icon: Users },
+      { href: "/compliance", label: "Compliance", icon: Fingerprint },
+      // Template pages on the backend's /admin/users; hidden until it exists.
+      { href: "/users", label: "Accounts", icon: UserCog },
       { href: "/user-analysis", label: "User Analysis", icon: BarChart3 },
     ],
   },
   {
+    // Roster and posts come from Able's API, which scrapes every 8h on Railway.
     kind: "section", id: "creators", label: "Creators", icon: Users2,
     items: [
-      { href: "/prospects", label: "Prospects", icon: UserSearch },
       { href: "/creators", label: "Creators", icon: Users2 },
-      { href: "/creators/attribution", label: "Attribution", icon: UserSearch },
       { href: "/creators/posts", label: "Posts", icon: FileText },
-      { href: "/creators/calendar", label: "Calendar", icon: CalendarDays },
-      { href: "/creators/performance", label: "Performance", icon: BarChart3 },
     ],
   },
   {
     kind: "section", id: "growth", label: "Growth", icon: Crosshair,
     items: [
-      { href: "/reviews", label: "App Store Reviews", icon: MessageSquare },
+      { href: "/growth", label: "Growth", icon: TrendingUp },
+      { href: "/activation", label: "Activation", icon: Filter },
+      { href: "/referrals", label: "Referrals", icon: Share2 },
+      { href: "/card-spend", label: "Card spend", icon: CreditCard },
       { href: "/website", label: "Website Analytics", icon: Globe },
       { href: "/competitors", label: "Competitors", icon: Trophy },
+      { href: "/reviews", label: "App Store Reviews", icon: MessageSquare },
+    ],
+  },
+  {
+    kind: "section", id: "giving", label: "Giving", icon: HeartHandshake,
+    items: [
+      { href: "/giving", label: "Giving", icon: HeartHandshake },
     ],
   },
   {
