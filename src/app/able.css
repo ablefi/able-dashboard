@@ -1,0 +1,153 @@
+/* Able's shared light identity. Applied to every route, including login,
+   loading states and modal portals; legacy navy token names remain compatible.
+   Important tokens intentionally supersede saved dark theme-picker values. */
+:root,
+.app-shell[data-presentation] {
+  color-scheme: light;
+  --color-app-navy: #ffffff !important;
+  --color-app-navy-light: #f7f7f7 !important;
+  --color-app-navy-card: #ffffff !important;
+  --color-app-navy-raised: #f2f2f2 !important;
+  --color-app-blue: #111111 !important;
+  --color-app-blue-light: #333333 !important;
+  --color-app-blue-dark: #000000 !important;
+  --color-app-accent: #111111 !important;
+  --color-app-accent-bright: #555555 !important;
+  --color-app-stroke: #dedede !important;
+  --color-ink: #151515 !important;
+  --color-ink-muted: #555555 !important;
+  --color-ink-faint: #707070 !important;
+  --color-stat: #111111 !important;
+  --color-rule: #e5e5e5 !important;
+  --color-rule-strong: #cccccc !important;
+  --color-cat-1: #b8b8b8 !important;
+  --color-cat-2: #909090 !important;
+  --color-cat-3: #666666 !important;
+  --color-cat-4: #454545 !important;
+  --color-cat-5: #282828 !important;
+  --color-cat-6: #111111 !important;
+  /* Status labels/icons retain their meaning without decorative colour. */
+  --color-app-green: #333333 !important;
+  --color-app-red: #111111 !important;
+  --color-app-red-text: #333333 !important;
+  --color-app-orange: #555555 !important;
+  --color-app-violet: #555555 !important;
+  --color-app-violet-text: #555555 !important;
+  --color-app-cyan: #555555 !important;
+  --color-app-teal: #555555 !important;
+  --color-app-gold: #555555 !important;
+  --color-app-purple: #555555 !important;
+  --app-glass-stroke: #dedede;
+  --color-red-400: #555555;
+  --color-red-500: #333333;
+  --color-amber-300: #555555;
+  --color-amber-400: #555555;
+  --color-amber-500: #555555;
+  --color-emerald-300: #333333;
+  --color-emerald-500: #333333;
+}
+
+html, body { background: #fff; color: var(--color-ink); }
+.app-shell[data-presentation] { background: #fff !important; }
+.app-shell[data-presentation]::before { display: none !important; }
+.app-shell * { scrollbar-color: #d0d0d0 transparent; }
+.app-shell *::-webkit-scrollbar-thumb { background-color: #d0d0d0; }
+.app-shell *::-webkit-scrollbar-thumb:hover { background-color: #aaa; }
+.app-shell :focus-visible { outline: 2px solid #111; outline-offset: 3px; }
+
+/* Panels, dialogs, menus and inputs share a quiet neutral surface ramp. */
+.app-shell[data-presentation] .app-card,
+.app-shell[data-presentation] .chart-card,
+.app-shell[data-presentation] .app-page-header + div .rounded-xl,
+.app-shell[data-presentation] [class*="bg-app-navy-card"] {
+  background-color: #fff !important;
+  border-color: var(--color-rule) !important;
+}
+.app-shell[data-presentation] [class*="bg-app-navy-light"] { background-color: #f7f7f7 !important; }
+.app-shell[data-presentation] [class*="bg-app-navy-raised"] { background-color: #f2f2f2 !important; }
+.app-shell[data-presentation] .app-card,
+.app-shell[data-presentation] .chart-card {
+  border-radius: 18px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.025);
+  backdrop-filter: none;
+}
+.app-shell .chart-card::before { display: none; }
+.app-shell .chart-card:hover { border-color: #ccc; }
+.app-shell [class*="border-white"],
+.app-shell [class*="divide-white"] > :not(:last-child) { border-color: var(--color-rule) !important; }
+.app-shell [class*="hover:bg-white"]:hover { background-color: #f4f4f4 !important; }
+.app-shell [class*="hover:text-white"]:hover { color: #111 !important; }
+.app-shell [class*="shadow-black"] { --tw-shadow-color: rgb(0 0 0 / 0.09); }
+.app-shell[data-presentation] :is(input, textarea, select) {
+  color-scheme: light;
+  border-color: #dedede !important;
+}
+.app-shell input::placeholder, .app-shell textarea::placeholder { color: #858585; opacity: 1; }
+.app-shell select option { color: #151515; background: white; }
+.app-shell input[type="checkbox"], .app-shell input[type="radio"] { color-scheme: light; accent-color: #111; }
+
+/* Keep the existing bottom-nav behaviour; match it to Able's light canvas. */
+.app-shell[data-presentation] .app-tabbar,
+.app-shell[data-presentation] .app-sheet {
+  background: rgb(255 255 255 / 0.96) !important;
+  border: 1px solid #dedede !important;
+  box-shadow: 0 8px 32px rgb(0 0 0 / 0.08), 0 1px 3px rgb(0 0 0 / 0.04);
+  backdrop-filter: blur(20px);
+}
+.app-shell .app-bottom-nav {
+  position: fixed;
+  inset: auto 0 max(0px, env(safe-area-inset-bottom));
+  z-index: 40;
+  display: flex;
+  justify-content: center;
+}
+.app-shell .app-tabbar { max-width: calc(100vw - 24px); gap: 6px; padding: 6px; border-radius: 20px; }
+.app-shell .app-tab { min-width: 4.25rem; padding: 8px 10px 7px; border-radius: 14px; color: #6b6b6b; font-size: 12px; }
+.app-shell .app-tab:hover, .app-shell .app-tab.is-open { background: #f2f2f2; color: #111; }
+.app-shell[data-presentation] .app-tab.is-on {
+  background: #111 !important;
+  color: #fff !important;
+  box-shadow: 0 2px 5px rgb(0 0 0 / 0.12);
+}
+.app-shell .app-tab.is-on svg { color: #fff; }
+.app-shell .app-rail-btn.is-on { background: #ededed; color: #111; }
+.app-shell .app-tabs { background: #f7f7f7; border-color: #dedede; }
+.app-shell .app-tabs-pill { background: #e5e5e5; --tw-ring-color: #d8d8d8; }
+
+/* Explicit variants avoid white labels on white secondary buttons. */
+.app-shell[data-presentation] button[data-variant] { box-shadow: none !important; background-image: none !important; }
+.app-shell[data-presentation] button[data-variant="primary"],
+.app-shell[data-presentation] button[data-variant="danger"],
+.app-shell[data-presentation] button[data-variant="warning"],
+.app-shell[data-presentation] button[class*="from-app-blue"] {
+  background: #111 !important; color: #fff !important;
+}
+.app-shell[data-presentation] button[data-variant="primary"]:hover,
+.app-shell[data-presentation] button[data-variant="danger"]:hover,
+.app-shell[data-presentation] button[data-variant="warning"]:hover { background: #333 !important; }
+.app-shell[data-presentation] button[data-variant="secondary"] {
+  background: white !important; color: #151515 !important; border: 1px solid #d9d9d9 !important;
+}
+.app-shell[data-presentation] button[data-variant="secondary"]:hover { background: #f5f5f5 !important; }
+.app-shell[data-presentation] button[data-variant="ghost"] { color: #555 !important; }
+.app-shell[data-presentation] button[data-variant="ghost"]:hover { background: #f2f2f2 !important; color: #111 !important; }
+
+.app-shell table thead th { background: #fafafa !important; color: #555; box-shadow: inset 0 -1px #e5e5e5; }
+.app-shell table tbody td { border-bottom-color: #eee; }
+.app-shell table tbody tr:hover { background: #f7f7f7 !important; }
+.app-shell table tbody tr[data-selected="true"] { background: #ededed !important; }
+.app-shell .recharts-cartesian-grid line { stroke: #e8e8e8; }
+.app-shell .recharts-default-tooltip { background: white !important; border-color: #dedede !important; box-shadow: 0 4px 18px rgb(0 0 0 / 0.08); }
+.app-shell .app-page-header h1 { font-size: 1.5rem !important; font-weight: 650; }
+.Toastify {
+  --toastify-icon-color-success: #333;
+  --toastify-icon-color-error: #111;
+  --toastify-icon-color-warning: #555;
+  --toastify-color-progress-success: #333;
+  --toastify-color-progress-error: #111;
+  --toastify-color-progress-warning: #555;
+}
+@media (max-width: 640px) {
+  .app-shell .app-tab { min-width: 0; padding: 9px 7px; font-size: 10px; }
+  .app-shell .app-tabbar { gap: 0; padding: 5px; }
+}

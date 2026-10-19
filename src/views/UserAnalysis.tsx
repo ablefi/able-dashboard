@@ -22,8 +22,8 @@ import { PlacesAndPeople, useAttribution } from "@/components/creators/attributi
 
 const GRID = "rgba(255,255,255,0.05)";
 const AX = "rgba(255,255,255,0.10)";
-const TICK = "#8499b3";
-const GENDER_COLORS: Record<string, string> = { Male: "#3b82f6", Female: "#ec4899", "N/A": "#64748b" };
+const TICK = "#707070";
+const GENDER_COLORS: Record<string, string> = { Male: "#222222", Female: "#888888", "N/A": "#777777" };
 
 // Same single-hue ramp the cancel donut uses. Six unrelated hues is what made
 // these read as a legend rather than a chart; lightness separates just as well
@@ -34,7 +34,7 @@ const LOC_COLORS = [
   "var(--color-cat-3)", "var(--color-cat-2)", "var(--color-cat-1)",
 ];
 /** The folded remainder stays deliberately neutral. */
-const OTHER_COLOR = "#64748b";
+const OTHER_COLOR = "#777777";
 /** Top-N categories + an "Other" fold, so the pie never cycles hues. */
 function foldTop(data: { name: string; count: number }[], n = 6): { name: string; value: number }[] {
   const top = data.slice(0, n).map((d) => ({ name: d.name, value: d.count }));
@@ -402,7 +402,7 @@ const UserAnalysis: React.FC = () => {
               <ResponsiveContainer width="100%" height={250}>
                 <PieChart>
                   <Pie data={stats.genderData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={58} outerRadius={92} paddingAngle={3} stroke="none" isAnimationActive={false} label={(p: any) => `${p.name} ${(((p.percent as number) || 0) * 100).toFixed(0)}%`} labelLine={false}>
-                    {stats.genderData.map((d) => <Cell key={d.name} fill={GENDER_COLORS[d.name] || "#64748b"} />)}
+                    {stats.genderData.map((d) => <Cell key={d.name} fill={GENDER_COLORS[d.name] || "#777777"} />)}
                   </Pie>
                   <Tooltip content={<PieTooltip />} />
                 </PieChart>
@@ -482,7 +482,7 @@ const UserAnalysis: React.FC = () => {
                   <Tooltip cursor={{ fill: "rgba(255,255,255,0.03)" }} content={<CustomTooltip />} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
                   <Bar yAxisId="n" dataKey="count" name="Gave an age" fill="url(#gCyan)" radius={[4, 4, 0, 0]} maxBarSize={28} opacity={0.5} />
-                  <Line yAxisId="age" type="monotone" dataKey="avgAge" name="Avg age" stroke="#8b5cf6" strokeWidth={2} dot={false} />
+                  <Line yAxisId="age" type="monotone" dataKey="avgAge" name="Avg age" stroke="#555555" strokeWidth={2} dot={false} />
                 </ComposedChart>
               </ResponsiveContainer>
               <p className="mt-3 text-[11px] leading-relaxed text-ink-faint">
@@ -503,7 +503,7 @@ const UserAnalysis: React.FC = () => {
                 <Tooltip cursor={{ fill: "rgba(255,255,255,0.03)" }} content={<CustomTooltip />} />
                 <Legend />
                 <Bar yAxisId="left" dataKey="totalCount" name="Total Users" fill="url(#gBlue)" radius={[6, 6, 0, 0]} maxBarSize={56} />
-                <Line yAxisId="right" type="monotone" dataKey="rate" name="Conversion Rate" stroke="#8b5cf6" strokeWidth={3} dot={{ r: 4, fill: "#8b5cf6", strokeWidth: 0 }} />
+                <Line yAxisId="right" type="monotone" dataKey="rate" name="Conversion Rate" stroke="#555555" strokeWidth={3} dot={{ r: 4, fill: "#555555", strokeWidth: 0 }} />
               </ComposedChart>
             </ResponsiveContainer>
           </ChartCard>

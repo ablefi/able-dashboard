@@ -3,6 +3,7 @@ import { Inter, Manrope, IBM_Plex_Sans, Figtree } from "next/font/google";
 import "react-toastify/dist/ReactToastify.css";
 import "@/index.css";
 import "./globals.css";
+import "./able.css";
 import { Providers } from "./providers";
 import { BRAND } from "@/lib/brand";
 
@@ -38,7 +39,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#101A30",
+  themeColor: "#ffffff",
 };
 
 /**

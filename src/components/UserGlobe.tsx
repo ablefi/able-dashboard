@@ -336,27 +336,27 @@ export default function UserGlobe({
       b.scale(dpr, dpr);
       const bPath = geoPath(mapProjection, b);
       b.beginPath(); bPath({ type: "Sphere" });
-      b.fillStyle = "#0e1c36"; b.fill();
-      b.strokeStyle = "rgba(96,165,250,0.07)"; b.lineWidth = 0.5;
+      b.fillStyle = "#1b1b1b"; b.fill();
+      b.strokeStyle = "rgba(154,154,154,0.07)"; b.lineWidth = 0.5;
       b.beginPath(); bPath(GRATICULE); b.stroke();
       b.beginPath(); bPath(LAND_GEOMETRY);
-      b.fillStyle = "rgba(36,70,111,0.9)"; b.fill();
-      b.strokeStyle = "rgba(107,163,224,0.45)"; b.stroke();
-      b.strokeStyle = "rgba(96,165,250,0.25)"; b.lineWidth = 1;
+      b.fillStyle = "rgba(65,65,65,0.9)"; b.fill();
+      b.strokeStyle = "rgba(153,153,153,0.45)"; b.stroke();
+      b.strokeStyle = "rgba(154,154,154,0.25)"; b.lineWidth = 1;
       b.beginPath(); bPath({ type: "Sphere" }); b.stroke();
     }
     let mapSource: Prepared[] | null = null;
     let mapPlotted: Plotted[] = [];
 
     const ocean = ctx.createRadialGradient(c - 0.24 * R, c - 0.36 * R, 0, c - 0.24 * R, c - 0.36 * R, R);
-    ocean.addColorStop(0, "#1b3766");
-    ocean.addColorStop(0.7, "#0e1c36");
-    ocean.addColorStop(1, "#080f1f");
+    ocean.addColorStop(0, "#343434");
+    ocean.addColorStop(0.7, "#1b1b1b");
+    ocean.addColorStop(1, "#0f0f0f");
 
     const atmo = ctx.createRadialGradient(c, c, 0, c, c, R + 18);
-    atmo.addColorStop(0.82, "rgba(96,165,250,0)");
-    atmo.addColorStop(0.96, "rgba(96,165,250,0.16)");
-    atmo.addColorStop(1, "rgba(96,165,250,0)");
+    atmo.addColorStop(0.82, "rgba(154,154,154,0)");
+    atmo.addColorStop(0.96, "rgba(154,154,154,0.16)");
+    atmo.addColorStop(1, "rgba(154,154,154,0)");
 
     let raf = 0;
     let lastDraw = performance.now();
@@ -419,7 +419,7 @@ export default function UserGlobe({
       ctx.arc(c, c, R, 0, 2 * Math.PI);
       ctx.fill();
 
-      ctx.strokeStyle = "rgba(96,165,250,0.07)";
+      ctx.strokeStyle = "rgba(154,154,154,0.07)";
       ctx.lineWidth = 0.5;
       ctx.beginPath();
       path(GRATICULE);
@@ -427,12 +427,12 @@ export default function UserGlobe({
 
       ctx.beginPath();
       path(LAND_GEOMETRY);
-      ctx.fillStyle = "rgba(36,70,111,0.9)";
+      ctx.fillStyle = "rgba(65,65,65,0.9)";
       ctx.fill();
-      ctx.strokeStyle = "rgba(107,163,224,0.45)";
+      ctx.strokeStyle = "rgba(153,153,153,0.45)";
       ctx.stroke();
 
-      ctx.strokeStyle = "rgba(96,165,250,0.25)";
+      ctx.strokeStyle = "rgba(154,154,154,0.25)";
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.arc(c, c, R, 0, 2 * Math.PI);
@@ -498,20 +498,20 @@ export default function UserGlobe({
       // Halos first, so every core sits on top of every halo. A halo goes to
       // cells placed by real coordinates, plus every cell of the country being
       // hovered.
-      ctx.fillStyle = "rgba(96,165,250,0.16)";
+      ctx.fillStyle = "rgba(154,154,154,0.16)";
       ctx.beginPath();
       for (const p of plotted) if (p.gps > 0 && lit !== p.cc) arc(p, p.r + 2.5);
       ctx.fill();
 
       if (lit) {
-        ctx.fillStyle = "rgba(191,219,254,0.30)";
+        ctx.fillStyle = "rgba(215,215,215,0.30)";
         ctx.beginPath();
         for (const p of plotted) if (lit === p.cc) arc(p, p.r + 2.5);
         ctx.fill();
       }
 
       // Solid cores: we know where these people are.
-      ctx.fillStyle = "rgba(125,211,252,0.95)";
+      ctx.fillStyle = "rgba(190,190,190,0.95)";
       ctx.beginPath();
       for (const p of plotted) if (p.gps > 0 && lit !== p.cc) arc(p, p.r);
       ctx.fill();
@@ -519,18 +519,18 @@ export default function UserGlobe({
       // A timezone-placed cell is a guess at city level, and every user in the
       // zone lands on the very same point. Drawn hollow so a stack of them
       // cannot pass for a real cluster.
-      ctx.strokeStyle = "rgba(125,211,252,0.42)";
+      ctx.strokeStyle = "rgba(190,190,190,0.42)";
       ctx.lineWidth = 1;
       ctx.beginPath();
       for (const p of plotted) if (p.gps === 0 && lit !== p.cc) arc(p, p.r);
       ctx.stroke();
 
       if (lit) {
-        ctx.fillStyle = "rgba(224,242,254,0.98)";
+        ctx.fillStyle = "rgba(238,238,238,0.98)";
         ctx.beginPath();
         for (const p of plotted) if (lit === p.cc && p.gps > 0) arc(p, p.r);
         ctx.fill();
-        ctx.strokeStyle = "rgba(191,219,254,0.8)";
+        ctx.strokeStyle = "rgba(215,215,215,0.8)";
         ctx.beginPath();
         for (const p of plotted) if (lit === p.cc && p.gps === 0) arc(p, p.r);
         ctx.stroke();

@@ -33,13 +33,13 @@ const baseOptions = (currency: boolean) => ({
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
-    legend: { position: "top" as const, labels: { color: "#cbd5e1" } },
-    tooltip: { backgroundColor: "#15203a", titleColor: "#f0f4f8", bodyColor: "#94a3b8", borderColor: "rgba(96,165,250,0.3)", borderWidth: 1 },
+    legend: { position: "top" as const, labels: { color: "#444444" } },
+    tooltip: { backgroundColor: "#202020", titleColor: "#f3f3f3", bodyColor: "#666666", borderColor: "rgba(154,154,154,0.3)", borderWidth: 1 },
   },
   scales: {
-    x: { ticks: { color: "#94a3b8" }, grid: { color: "rgba(255,255,255,0.06)" } },
+    x: { ticks: { color: "#666666" }, grid: { color: "rgba(255,255,255,0.06)" } },
     y: {
-      ticks: { color: "#94a3b8", callback: (v: any) => (currency ? "$" + v.toLocaleString() : v.toLocaleString()) },
+      ticks: { color: "#666666", callback: (v: any) => (currency ? "$" + v.toLocaleString() : v.toLocaleString()) },
       grid: { color: "rgba(255,255,255,0.06)" },
     },
   },
@@ -67,9 +67,9 @@ const ReferralCodeDetail: React.FC = () => {
     return {
       labels: months,
       datasets: [
-        { label: "Net Revenue", data: details.monthlyBreakdown.map((i) => i.netRevenueUsd), borderColor: "#34d399", backgroundColor: "rgba(52,211,153,0.12)", fill: true, tension: 0.4 },
-        { label: "Gross Revenue", data: details.monthlyBreakdown.map((i) => i.totalRevenueUsd), borderColor: "#60a5fa", backgroundColor: "rgba(96,165,250,0.1)", fill: false, tension: 0.4 },
-        { label: "Refunds", data: details.monthlyBreakdown.map((i) => i.totalRefundsUsd), borderColor: "#fb7185", backgroundColor: "rgba(251,113,133,0.1)", fill: false, tension: 0.4 },
+        { label: "Net Revenue", data: details.monthlyBreakdown.map((i) => i.netRevenueUsd), borderColor: "#444444", backgroundColor: "rgba(157,157,157,0.12)", fill: true, tension: 0.4 },
+        { label: "Gross Revenue", data: details.monthlyBreakdown.map((i) => i.totalRevenueUsd), borderColor: "#666666", backgroundColor: "rgba(154,154,154,0.1)", fill: false, tension: 0.4 },
+        { label: "Refunds", data: details.monthlyBreakdown.map((i) => i.totalRefundsUsd), borderColor: "#aaaaaa", backgroundColor: "rgba(157,157,157,0.1)", fill: false, tension: 0.4 },
       ],
     };
   };
@@ -77,7 +77,7 @@ const ReferralCodeDetail: React.FC = () => {
     if (!details) return null;
     return {
       labels: details.monthlyBreakdown.map((i) => formatMonth(i.month)),
-      datasets: [{ label: "Transactions", data: details.monthlyBreakdown.map((i) => i.transactionCount), backgroundColor: "#3b82f6", borderColor: "#60a5fa", borderWidth: 1 }],
+      datasets: [{ label: "Transactions", data: details.monthlyBreakdown.map((i) => i.transactionCount), backgroundColor: "#222222", borderColor: "#666666", borderWidth: 1 }],
     };
   };
   const productRevenueChartData = () => {
@@ -86,9 +86,9 @@ const ReferralCodeDetail: React.FC = () => {
     const pairs = new Set<string>();
     details.monthlyBreakdown.forEach((m) => m.revenueByProduct.forEach((p) => pairs.add(`${p.productId}-${p.currency}`)));
     const colors = [
-      { b: "#34d399", bg: "rgba(52,211,153,0.1)" }, { b: "#60a5fa", bg: "rgba(96,165,250,0.1)" },
-      { b: "#a855f7", bg: "rgba(168,85,247,0.1)" }, { b: "#f59e0b", bg: "rgba(245,158,11,0.1)" },
-      { b: "#ec4899", bg: "rgba(236,72,153,0.1)" }, { b: "#2dd4bf", bg: "rgba(45,212,191,0.1)" },
+      { b: "#444444", bg: "rgba(157,157,157,0.1)" }, { b: "#666666", bg: "rgba(154,154,154,0.1)" },
+      { b: "#555555", bg: "rgba(128,128,128,0.1)" }, { b: "#777777", bg: "rgba(167,167,167,0.1)" },
+      { b: "#888888", bg: "rgba(130,130,130,0.1)" }, { b: "#999999", bg: "rgba(160,160,160,0.1)" },
     ];
     const datasets = Array.from(pairs).map((pair, index) => {
       const [productId, currency] = pair.split("-");

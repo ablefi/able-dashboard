@@ -120,7 +120,7 @@ export function ColumnsButton<T>({
     <div className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex h-[2.125rem] items-center gap-1.5 rounded-xl border border-white/[0.12] bg-app-navy-card/60 px-3 text-[0.8125rem] font-medium text-white transition-colors hover:border-white/[0.22] hover:bg-app-navy-card"
+        className="inline-flex h-[2.125rem] items-center gap-1.5 rounded-xl border border-rule bg-app-navy-card/60 px-3 text-[0.8125rem] font-medium text-ink transition-colors hover:border-rule-strong hover:bg-app-navy-card"
       >
         <Columns3 className="h-3.5 w-3.5" />
         Columns

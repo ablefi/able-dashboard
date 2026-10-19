@@ -94,7 +94,7 @@ export default function BottomNav({ admin }: { admin: AdminSession | null }) {
   }, [openId]);
 
   return (
-    <div ref={barRef} className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center">
+    <div ref={barRef} className="app-bottom-nav pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center">
       {/* The overflow sheet is a plain list of the remaining sections. */}
       {openId === "__more__" && (
         <div onMouseEnter={clearHover} onMouseLeave={hoverLeave} className="app-sheet pointer-events-auto mb-5 w-[min(90vw,20rem)] rounded-2xl border border-white/[0.09] bg-app-navy-card/95 p-1.5 shadow-2xl shadow-black/60 backdrop-blur-xl">
