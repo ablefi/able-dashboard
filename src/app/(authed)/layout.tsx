@@ -6,6 +6,7 @@ import React, { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import BottomNav from "@/components/layout/BottomNav";
+import SectionNav from "@/components/layout/SectionNav";
 import CommandPalette from "@/components/layout/CommandPalette";
 import { DEFAULT_PRESENTATION, readPresentation, type Presentation } from "@/lib/presentation";
 import { applyFont, readFont, type FontKey } from "@/lib/fonts";
@@ -95,7 +96,7 @@ export default function AuthedLayout({ children }: { children: React.ReactNode }
             composed rather than stretched: an uncapped page gives you 1900px
             table rows and unreadable line lengths. The width gets spent on
             side-by-side regions (PageGrid) instead of on wider single columns. */}
-        <div className="app-canvas px-6 py-8 lg:px-10">{children}</div>
+        <div className="app-canvas px-6 py-8 lg:px-10"><SectionNav />{children}</div>
       </main>
     </div>
   );

@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Loader2, RefreshCw } from "lucide-react";
 import PageHeader from "@/components/ui/PageHeader";
+import { ReportError, ReportLoading } from "@/components/ui/ReportState";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { PlatformPill } from "@/components/creators/PlatformBadge";
@@ -134,13 +135,11 @@ export default function CreatorCalendar() {
         }
       />
 
-      {error && <div className="rounded-lg border border-app-red/30 bg-app-red/10 px-3 py-2 text-sm text-app-red-text">{error}</div>}
+      {error && <ReportError error={error} onRetry={() => void refresh()} stale={!!data} />}
 
       {!data ? (
         loading || !error ? (
-          <div className="flex items-center justify-center py-24 text-ink-muted">
-            <Loader2 className="mr-2 h-6 w-6 animate-spin" /> Loading posts…
-          </div>
+          <ReportLoading label="Loading calendar" />
         ) : null
       ) : (
         <Card

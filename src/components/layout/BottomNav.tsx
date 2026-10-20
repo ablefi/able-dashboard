@@ -21,7 +21,8 @@ const DEFAULT_SECTION_HREF: Record<string, string> = {
   users: "/users",
   creators: "/creators",
   referral: "/referral-codes",
-  growth: "/reviews",
+  growth: "/growth",
+  finances: "/money",
 };
 
 /**

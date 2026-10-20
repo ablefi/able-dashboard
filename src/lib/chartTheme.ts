@@ -35,7 +35,7 @@ export const SERIES = [
 
 /** Money in / out, matching statColors. */
 export const MONEY_IN = "var(--color-app-green)";
-export const MONEY_OUT = "var(--color-app-red-text)";
+export const MONEY_OUT = "var(--color-cat-2)";
 export const ACCENT = "var(--color-app-blue-light)";
 
 /** Standard chart heights: a full panel and a compact one in a 3-up grid. */

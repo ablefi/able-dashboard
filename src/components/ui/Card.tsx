@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
 
-/** Surface card matching the navy aesthetic. Optional title header. */
+/** Shared Able panel: one header, action area and body spacing scale. */
 export default function Card({
   title,
   actions,

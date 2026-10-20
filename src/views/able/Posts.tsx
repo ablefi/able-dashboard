@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Loader2, RefreshCw } from "lucide-react";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import PageHeader from "@/components/ui/PageHeader";
+import { ReportError, ReportLoading } from "@/components/ui/ReportState";
 import Card from "@/components/ui/Card";
 import FinCard from "@/components/ui/FinCard";
 import Button from "@/components/ui/Button";
@@ -266,13 +267,11 @@ export default function Posts() {
         }
       />
 
-      {error && <div className="rounded-lg border border-app-red/30 bg-app-red/10 px-3 py-2 text-sm text-app-red-text">{error}</div>}
+      {error && <ReportError error={error} onRetry={() => void refresh()} stale={!!data} />}
 
       {!data || !t ? (
         loading || !error ? (
-          <div className="flex items-center justify-center py-24 text-ink-muted">
-            <Loader2 className="mr-2 h-6 w-6 animate-spin" /> Loading posts…
-          </div>
+          <ReportLoading label="Loading posts" />
         ) : null
       ) : (
         <div className={cn("space-y-3 transition-opacity", loading && "opacity-60")}>

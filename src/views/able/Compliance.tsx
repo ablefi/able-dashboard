@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
 import PageHeader from "@/components/ui/PageHeader";
+import { ReportError, ReportLoading } from "@/components/ui/ReportState";
 import Card from "@/components/ui/Card";
 import FinCard from "@/components/ui/FinCard";
 import Button from "@/components/ui/Button";
@@ -228,13 +229,11 @@ export default function Compliance() {
         }
       />
 
-      {error && <div className="rounded-lg border border-app-red/30 bg-app-red/10 px-4 py-2.5 text-sm text-app-red-text">Could not load compliance data: {error}</div>}
+      {error && <ReportError error={error} onRetry={() => void refresh()} stale={!!data} />}
 
       {!data || !stats ? (
         !error && (
-          <div className="flex items-center justify-center py-24 text-ink-muted">
-            <Loader2 className="mr-2 h-6 w-6 animate-spin" /> Loading compliance data…
-          </div>
+          <ReportLoading label="Loading compliance" />
         )
       ) : (
         <div className={cn("space-y-3 transition-opacity", loading && "opacity-60")}>

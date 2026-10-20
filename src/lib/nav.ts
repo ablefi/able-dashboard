@@ -57,11 +57,14 @@ export const NAV: Node[] = [
     kind: "section", id: "growth", label: "Growth", icon: Crosshair,
     items: [
       { href: "/growth", label: "Growth", icon: TrendingUp },
-      { href: "/money", label: "Money", icon: Wallet },
       { href: "/website", label: "Website Analytics", icon: Globe },
       { href: "/competitors", label: "Competitors", icon: Trophy },
       { href: "/reviews", label: "App Store Reviews", icon: MessageSquare },
     ],
+  },
+  {
+    kind: "section", id: "finances", label: "Finances", icon: Wallet,
+    items: [{ href: "/money", label: "Deposits & spending", icon: Wallet }],
   },
   {
     kind: "section", id: "giving", label: "Giving", icon: HeartHandshake,

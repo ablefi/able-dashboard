@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Inbox } from "lucide-react";
 
 /** Styled empty-state. */
 export default function Empty({
@@ -25,9 +26,9 @@ export default function Empty({
           : "flex flex-col items-center justify-center rounded-2xl border border-white/[0.06] bg-app-navy-card/40 px-6 py-16 text-center backdrop-blur-sm"
       }
     >
-      {icon && (
+      {(!compact || icon) && (
         <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.04] text-ink-muted">
-          {icon}
+          {icon ?? <Inbox className="h-5 w-5" aria-hidden />}
         </div>
       )}
       <h3 className="text-sm font-semibold text-ink">{title}</h3>

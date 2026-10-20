@@ -17,7 +17,7 @@ import {
 
 export default function Money() {
   return (
-    <ReportPage<MarketingReport> title="Money" path={MARKETING_PATH} refreshMs={MARKETING_REFRESH_MS}>
+    <ReportPage<MarketingReport> title="Finances" path={MARKETING_PATH} refreshMs={MARKETING_REFRESH_MS}>
       {(m) => <MoneyBody m={m} />}
     </ReportPage>
   );

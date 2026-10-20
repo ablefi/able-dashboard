@@ -47,6 +47,8 @@ export type Column<T> = {
   clip?: boolean;
   /** false = column can't be hidden from the column picker. */
   hideable?: boolean;
+  /** Start with advanced metrics hidden without overriding saved preferences. */
+  defaultHidden?: boolean;
 };
 
 const loadLS = (k: string) => {
@@ -86,7 +88,7 @@ export function useTablePrefs<T>(storageKey: string, columns: Column<T>[]) {
       const saved = loadLS(hKey);
       if (Array.isArray(saved)) return new Set(saved);
     }
-    return new Set();
+    return new Set(columns.filter((c) => c.defaultHidden && c.hideable !== false).map((c) => c.key));
   });
   useEffect(() => {
     saveLS(wKey, widths);
@@ -246,7 +248,7 @@ export default function DataTable<T>({
     !selection || rowIds.length === 0 || selectedHere === 0 ? "off" : selectedHere === rowIds.length ? "on" : "some";
 
   return (
-    <div className={cn("max-h-[70vh] overflow-auto", className)}>
+    <div className={cn("app-data-table max-h-[70vh] overflow-auto", className)}>
       <table className="text-sm" style={{ tableLayout: "fixed", width: totalWidth, minWidth: "100%" }}>
         <colgroup>
           {selection && <col style={{ width: SEL_W }} />}

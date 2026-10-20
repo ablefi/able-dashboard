@@ -6,6 +6,7 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import PageHeader from "@/components/ui/PageHeader";
 import Button from "@/components/ui/Button";
 import Empty from "@/components/ui/Empty";
+import { ReportError, ReportLoading } from "@/components/ui/ReportState";
 import { CHART_H, SERIES, TOOLTIP_STYLE } from "@/lib/chartTheme";
 import { useAbleReport } from "@/lib/useAbleReport";
 import { cn } from "@/lib/utils";
@@ -25,7 +26,7 @@ export const LEGEND_PROPS = {
  * Cancels the card body padding (the Density block in globals.css pins it to
  * 0.7rem 0.85rem) so a table sits flush with the card edges.
  */
-export const FLUSH = "-mx-[0.85rem] -my-[0.7rem]";
+export const FLUSH = "app-flush";
 
 /**
  * Header, refresh, error banner and first-load state for a page built on one
@@ -58,15 +59,13 @@ export default function ReportPage<T>({
         }
       />
 
-      {error && <div className="rounded-lg border border-app-red/30 bg-app-red/10 px-3 py-2 text-xs text-app-red-text">{error}</div>}
+      {error && <ReportError error={error} onRetry={() => void refresh()} stale={!!data} />}
 
       {data ? (
         <div className={cn("space-y-3 transition-opacity", loading && "opacity-60")}>{children(data)}</div>
       ) : (
         !error && (
-          <div className="flex items-center justify-center py-16 text-sm text-ink-muted">
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading report
-          </div>
+          <ReportLoading />
         )
       )}
     </div>

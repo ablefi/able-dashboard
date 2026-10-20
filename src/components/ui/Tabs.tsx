@@ -64,6 +64,8 @@ export default function Tabs({
       {tabs.map((t) => (
         <button
           key={t.key}
+          type="button"
+          aria-pressed={active === t.key}
           ref={(el) => {
             btnRefs.current[t.key] = el;
           }}

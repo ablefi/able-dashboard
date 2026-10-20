@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 
 const variants: Record<string, string> = {
-  default: "bg-white/[0.04] text-ink-muted",
+  default: "bg-app-navy-light text-ink-muted",
   success: "bg-app-green/15 text-app-green",
   warning: "bg-app-orange/15 text-app-orange",
   danger: "bg-app-red/20 text-app-red-text",
@@ -21,12 +21,12 @@ export default function Badge({
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+        "app-badge inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
         variants[variant],
         className
       )}
     >
-      {children}
+      {variant !== "default" && <span aria-hidden className="mr-1.5 text-[10px]">{variant === "success" ? "✓" : variant === "warning" ? "!" : variant === "danger" ? "×" : "•"}</span>}{children}
     </span>
   );
 }
