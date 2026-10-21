@@ -156,8 +156,8 @@ export function InfoDot({ text }: { text: string }) {
  * percentage on its own would flatter it.
  */
 
-const PIE_COLORS = ["#3b82f6", "#ec4899", "#22d3ee", "#a78bfa", "#f59e0b", "#34d399", "#f472b6", "#60a5fa", "#fbbf24", "#94a3b8"];
-const TICK = "#8499b3";
+const PIE_COLORS = ["#222222", "#888888", "#aaaaaa", "#555555", "#777777", "#444444", "#999999", "#666666", "#bbbbbb", "#666666"];
+const TICK = "#707070";
 const GRID = "rgba(255,255,255,0.05)";
 
 function ChartTip({ active, payload, total }: any) {
@@ -219,7 +219,7 @@ function BarSplit({ rows, height = 150 }: { rows: { name: string; count: number 
         <XAxis dataKey="name" tick={{ fill: TICK, fontSize: 10 }} axisLine={false} tickLine={false} interval={0} />
         <YAxis tick={{ fill: TICK, fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
         <Tooltip cursor={{ fill: "rgba(255,255,255,0.03)" }} content={<ChartTip total={total} />} />
-        <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={34} />
+        <Bar dataKey="count" fill="#222222" radius={[4, 4, 0, 0]} maxBarSize={34} />
       </BarChart>
     </ResponsiveContainer>
   );
@@ -232,7 +232,7 @@ function Nothing() {
 const GENDER_LABEL: Record<string, string> = { male: "Male", female: "Female" };
 const PLATFORM_LABEL: Record<string, string> = { ios: "iOS", android: "Android" };
 /** Fixed per platform, so iOS is the same colour on every creator's page. */
-const PLATFORM_COLORS: Record<string, string> = { iOS: "#60a5fa", Android: "#34d399" };
+const PLATFORM_COLORS: Record<string, string> = { iOS: "#666666", Android: "#444444" };
 const relabel = (rows: { name: string; count: number }[], map: Record<string, string>) =>
   rows.map((r) => ({ ...r, name: map[r.name] ?? r.name }));
 

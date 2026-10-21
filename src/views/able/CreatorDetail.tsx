@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import Tabs from "@/components/ui/Tabs";
+import { ReportError, ReportLoading } from "@/components/ui/ReportState";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Loader2, Pencil, RefreshCw, Trash2 } from "lucide-react";
@@ -41,6 +43,7 @@ const viewsTooltip = (v: number) => [fmtInt(v), "Counted views"];
 
 export default function CreatorDetail({ id }: { id: string }) {
   const router = useRouter();
+  const [tab, setTab] = useState("performance");
   const { data, at, error, loading, refresh } = useAbleReport<CreatorsReport>(CREATORS_PATH, { refreshMs: CREATORS_REFRESH_MS });
   const canEdit = useAuth().can("creators:write");
   const editor = useCreatorEditor({ report: data, refresh });
@@ -94,11 +97,9 @@ export default function CreatorDetail({ id }: { id: string }) {
       <div className="space-y-3">
         <PageHeader title="Creator" subtitle={updatedLabel(at)} />
         {error ? (
-          <div className="rounded-lg border border-app-red/30 bg-app-red/10 px-3 py-2 text-sm text-app-red-text">{error}</div>
+          <ReportError error={error} onRetry={() => void refresh()} />
         ) : (
-          <div className="flex items-center justify-center py-24 text-ink-muted">
-            <Loader2 className="mr-2 h-6 w-6 animate-spin" /> Loading creator…
-          </div>
+          <ReportLoading label="Loading creator" />
         )}
       </div>
     );
@@ -166,9 +167,17 @@ export default function CreatorDetail({ id }: { id: string }) {
         }
       />
 
-      {error && <div className="rounded-lg border border-app-red/30 bg-app-red/10 px-3 py-2 text-sm text-app-red-text">{error}</div>}
+      {error && <ReportError error={error} onRetry={() => void refresh()} stale /> }
 
       <div className={cn("space-y-3 transition-opacity", loading && "opacity-60")}>
+        <div className="app-headline-grid">
+          <FinCard label="Signups" valueClass={STAT_NEUTRAL}>{fmtInt(c.signups)}</FinCard>
+          <FinCard label="Users with a card" valueClass={STAT_NEUTRAL}>{fmtInt(c.carded)}</FinCard>
+          <FinCard label="Card spend" valueClass={STAT_NEUTRAL}>{usd2(c.spendUsd)}</FinCard>
+          <FinCard label="Counted views" valueClass={STAT_NEUTRAL}>{fmtInt(c.countedViews)}</FinCard>
+        </div>
+        <Tabs tabs={[{ key: "performance", label: "Performance" }, { key: "content", label: "Content" }, { key: "deal", label: "Deal details" }]} active={tab} onChange={setTab} />
+        {tab === "deal" && (
         <Card>
           <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3 lg:grid-cols-6">
             <div className="col-span-2 sm:col-span-1 lg:col-span-1">
@@ -231,18 +240,12 @@ export default function CreatorDetail({ id }: { id: string }) {
           </dl>
         </Card>
 
+
+        )}
+        {tab === "performance" && <div className="space-y-4">
         <div className="app-stat-grid grid">
-          <FinCard label="Signups" valueClass={STAT_NEUTRAL} note="Typed one of their codes">
-            {fmtInt(c.signups)}
-          </FinCard>
-          <FinCard label="Users with a card" valueClass={STAT_NEUTRAL} note="Of those signups">
-            {fmtInt(c.carded)}
-          </FinCard>
           <FinCard label="Spenders" valueClass={STAT_NEUTRAL} note="Of those signups">
             {fmtInt(c.spenders)}
-          </FinCard>
-          <FinCard label="Card spend" valueClass={STAT_NEUTRAL} note="USD, by those signups">
-            {usd2(c.spendUsd)}
           </FinCard>
           <FinCard label="Cost per signup" valueClass={STAT_NEUTRAL} note="USD fee per signup">
             {usd2(c.costPerSignupUsd)}
@@ -250,20 +253,11 @@ export default function CreatorDetail({ id }: { id: string }) {
           <FinCard label="Cost per card" valueClass={STAT_NEUTRAL} note="USD fee per user with a card">
             {usd2(c.costPerCardUsd)}
           </FinCard>
-          <FinCard label="Counted posts" valueClass={STAT_NEUTRAL} note="Last 90 days">
-            {fmtInt(c.countedPosts)}
-          </FinCard>
-          <FinCard label="Counted views" valueClass={STAT_NEUTRAL} note="Last 90 days">
-            {fmtInt(c.countedViews)}
-          </FinCard>
           <FinCard label="Avg views" valueClass={STAT_NEUTRAL} note="Per counted post">
             {fmtInt(c.avgViewsPerPost)}
           </FinCard>
           <FinCard label="CPM" valueClass={STAT_NEUTRAL} note="USD fee per 1,000 counted views">
             {usd2(c.cpmUsd)}
-          </FinCard>
-          <FinCard label="Pending posts" valueClass={c.pendingPosts ? "text-app-orange" : STAT_NEUTRAL} note="Waiting for approve or exclude">
-            {fmtInt(c.pendingPosts)}
           </FinCard>
         </div>
 
@@ -321,6 +315,10 @@ export default function CreatorDetail({ id }: { id: string }) {
           </Card>
         </div>
 
+
+        </div>}
+        {tab === "content" && <div className="space-y-4">
+          <p className="text-sm text-ink-muted">{fmtInt(c.countedPosts)} counted posts · {fmtInt(c.pendingPosts)} waiting for review</p>
         <Card
           title={`Scraped posts, last 90 days (${fmtInt(posts.length)})`}
           bodyClassName="p-0"
@@ -342,6 +340,8 @@ export default function CreatorDetail({ id }: { id: string }) {
           )}
           <p className="border-t border-white/[0.06] px-3 py-2 text-[11px] leading-snug text-ink-faint">{KIND_RULE[c.kind]}</p>
         </Card>
+
+        </div>}
       </div>
       {editor.dialogs}
     </div>

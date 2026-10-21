@@ -5,12 +5,9 @@ import Image from "next/image";
 import React, { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import Sidebar from "@/components/layout/Sidebar";
-import Rail from "@/components/layout/Rail";
-import TopNav from "@/components/layout/TopNav";
 import BottomNav from "@/components/layout/BottomNav";
+import SectionNav from "@/components/layout/SectionNav";
 import CommandPalette from "@/components/layout/CommandPalette";
-import { DEFAULT_NAV_MODE, readNavMode, type NavMode } from "@/lib/navMode";
 import { DEFAULT_PRESENTATION, readPresentation, type Presentation } from "@/lib/presentation";
 import { applyFont, readFont, type FontKey } from "@/lib/fonts";
 import UserAnalysisAutoRefresh from "@/components/UserAnalysisAutoRefresh";
@@ -31,8 +28,6 @@ export default function AuthedLayout({ children }: { children: React.ReactNode }
   const { user, initialized } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
-  const [navMode, setNavMode] = useState<NavMode>(DEFAULT_NAV_MODE);
   const [presentation, setPresentation] = useState<Presentation>(DEFAULT_PRESENTATION);
 
   // Not signed in → login.
@@ -46,19 +41,6 @@ export default function AuthedLayout({ children }: { children: React.ReactNode }
     const section = sectionForPath(pathname || "/");
     if (!canSeeSection(user, section)) router.replace("/");
   }, [initialized, user, pathname, router]);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") setCollapsed(localStorage.getItem("sidebar-collapsed") === "1");
-  }, []);
-
-  // Nav shell is a per-browser preference, switched live from the picker so it
-  // can be judged by using it rather than by reloading between commits.
-  useEffect(() => {
-    setNavMode(readNavMode());
-    const onChange = (e: Event) => setNavMode((e as CustomEvent).detail as NavMode);
-    window.addEventListener("app-nav-mode", onChange);
-    return () => window.removeEventListener("app-nav-mode", onChange);
-  }, []);
 
   // Font is applied here rather than in the picker, because the picker is not
   // mounted for everyone — a saved choice has to survive without it.
@@ -78,14 +60,6 @@ export default function AuthedLayout({ children }: { children: React.ReactNode }
     return () => window.removeEventListener("app-presentation", onChange);
   }, []);
 
-  const toggleCollapsed = () => {
-    setCollapsed((prev) => {
-      const next = !prev;
-      if (typeof window !== "undefined") localStorage.setItem("sidebar-collapsed", next ? "1" : "0");
-      return next;
-    });
-  };
-
   if (!initialized) {
     // Carries data-presentation like the real shell does. Without it this gate
     // renders as bare navy with a spinner on it, so the first thing you see on
@@ -103,20 +77,11 @@ export default function AuthedLayout({ children }: { children: React.ReactNode }
 
   if (!user) return null;
 
-  // Each shell reserves its own edge. Kept in one place so a mode can never
-  // half-apply and leave content under the chrome.
-  const pad =
-    navMode === "sidebar" ? (collapsed ? "pl-[4.25rem]" : "pl-64")
-    : navMode === "rail" ? "pl-[4.25rem]"
-    : navMode === "top" ? "pt-[5.25rem]"
-    : "pb-24";
-
   return (
     <div className="app-shell min-h-screen bg-app-navy text-ink" data-presentation={presentation}>
-      {navMode === "sidebar" && <Sidebar collapsed={collapsed} onToggle={toggleCollapsed} admin={user} />}
-      {navMode === "rail" && <Rail admin={user} />}
-      {navMode === "top" && <TopNav admin={user} />}
-      {navMode === "bottom" && <BottomNav admin={user} />}
+      {/* Able uses the Just Pray-style floating bottom navigation on every
+          screen. Saved experimental layouts must not restore the sidebar. */}
+      <BottomNav admin={user} />
 
       {/* Available in every mode: it is what lets the chrome be small. */}
       <CommandPalette admin={user} />
@@ -125,13 +90,13 @@ export default function AuthedLayout({ children }: { children: React.ReactNode }
       <UserAnalysisAutoRefresh />
       {/* Local-only palette control, for dialling the look in by eye. */}
       {user.isSuperAdmin && <ThemePicker />}
-      <main className={"transition-[padding] duration-200 " + pad}>
+      <main className="pb-24">
         {/* The canvas. Capped and centred under Focused, which sounds like the
             opposite of using the space but is the thing that makes it look
             composed rather than stretched: an uncapped page gives you 1900px
             table rows and unreadable line lengths. The width gets spent on
             side-by-side regions (PageGrid) instead of on wider single columns. */}
-        <div className="app-canvas px-6 py-8 lg:px-10">{children}</div>
+        <div className="app-canvas px-6 py-8 lg:px-10"><SectionNav />{children}</div>
       </main>
     </div>
   );

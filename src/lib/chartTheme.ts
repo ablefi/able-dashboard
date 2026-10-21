@@ -6,7 +6,7 @@
  */
 
 export const CHART = {
-  grid: "rgba(255,255,255,0.05)",
+  grid: "var(--color-rule)",
   tick: "var(--color-ink-faint)",
   tickFont: 11,
 };
@@ -14,13 +14,13 @@ export const CHART = {
 export const TOOLTIP_STYLE = {
   contentStyle: {
     backgroundColor: "var(--color-app-navy-raised)",
-    border: "1px solid rgba(255,255,255,0.12)",
+    border: "1px solid var(--color-rule)",
     borderRadius: "8px",
     fontSize: 12,
   },
   labelStyle: { color: "var(--color-ink)" },
   itemStyle: { color: "var(--color-ink)" },
-  cursor: { fill: "rgba(255,255,255,0.04)" },
+  cursor: { fill: "rgba(0,0,0,0.04)" },
 };
 
 /** Categorical series, one hue light to dark (see --color-cat-* in globals.css). */
@@ -35,7 +35,7 @@ export const SERIES = [
 
 /** Money in / out, matching statColors. */
 export const MONEY_IN = "var(--color-app-green)";
-export const MONEY_OUT = "var(--color-app-red-text)";
+export const MONEY_OUT = "var(--color-cat-2)";
 export const ACCENT = "var(--color-app-blue-light)";
 
 /** Standard chart heights: a full panel and a compact one in a 3-up grid. */

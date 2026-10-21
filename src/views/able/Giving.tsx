@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from "react";
 import { Download, Loader2, RefreshCw } from "lucide-react";
 import PageHeader from "@/components/ui/PageHeader";
+import { ReportError, ReportLoading } from "@/components/ui/ReportState";
 import Card from "@/components/ui/Card";
 import FinCard from "@/components/ui/FinCard";
 import Button from "@/components/ui/Button";
@@ -300,15 +301,11 @@ export default function Giving() {
         }
       />
 
-      {errors.map((e) => (
-        <div key={e} className="rounded-lg border border-app-red/30 bg-app-red/10 px-3 py-2 text-xs text-app-red-text">{e}</div>
-      ))}
+      {errors.length > 0 && <ReportError error={errors.join(" · ")} onRetry={refresh} stale={!!(g || st || mg)} />}
 
       {!g && !st && !mg ? (
         loading ? (
-          <div className="flex items-center justify-center py-20 text-ink-muted">
-            <Loader2 className="mr-2 h-6 w-6 animate-spin" /> Loading giving…
-          </div>
+          <ReportLoading label="Loading giving" />
         ) : errors.length === 0 ? (
           <Empty title="No giving data" description="The giving report has not loaded yet." />
         ) : null

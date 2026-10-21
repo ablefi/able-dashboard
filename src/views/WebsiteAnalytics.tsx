@@ -12,6 +12,7 @@ import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import { cn } from "@/lib/utils";
 import { prettyPlace } from "@/lib/countries";
+import { CHART, TOOLTIP_STYLE, ACCENT } from "@/lib/chartTheme";
 
 interface PageView {
   path: string;
@@ -28,13 +29,6 @@ type TimeRange = "24h" | "7d" | "30d" | "all";
 
 /** Pages your app links to internally (support, legal). Edit for your site. */
 const IN_APP_PATHS = ["/support", "/feedback", "/terms", "/privacy", "/terms-of-service", "/privacy-policy", "/terms-and-privacy"];
-
-const CHART = { grid: "rgba(255,255,255,0.05)", tick: "#8499b3" };
-const TOOLTIP_STYLE = {
-  contentStyle: { backgroundColor: "#15203a", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "8px" },
-  labelStyle: { color: "#f0f4f8" },
-  itemStyle: { color: "#f0f4f8" },
-};
 
 const authHeaders = (): Record<string, string> => {
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
@@ -185,7 +179,7 @@ export default function WebsiteAnalytics() {
                   <XAxis dataKey="date" tick={{ fill: CHART.tick, fontSize: 11 }} tickLine={false} axisLine={false} minTickGap={24} />
                   <YAxis tick={{ fill: CHART.tick, fontSize: 11 }} tickLine={false} axisLine={false} />
                   <Tooltip {...TOOLTIP_STYLE} />
-                  <Line type="monotone" dataKey="views" stroke="#60a5fa" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="views" stroke={ACCENT} strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             ) : (
@@ -265,7 +259,7 @@ export default function WebsiteAnalytics() {
                   <XAxis type="number" tick={{ fill: CHART.tick, fontSize: 11 }} tickLine={false} axisLine={false} />
                   <YAxis dataKey="device" type="category" tick={{ fill: CHART.tick, fontSize: 11 }} width={80} tickLine={false} axisLine={false} />
                   <Tooltip {...TOOLTIP_STYLE} />
-                  <Bar dataKey="count" fill="#8b5cf6" radius={[0, 6, 6, 0]} maxBarSize={26} />
+                  <Bar dataKey="count" fill={ACCENT} radius={[0, 6, 6, 0]} maxBarSize={26} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (

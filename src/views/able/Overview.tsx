@@ -25,6 +25,7 @@ import FinCard from "@/components/ui/FinCard";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import Empty from "@/components/ui/Empty";
+import { ReportError, ReportLoading } from "@/components/ui/ReportState";
 import DataTable, { useTablePrefs, type Column } from "@/components/ui/DataTable";
 import UserGlobe from "@/components/UserGlobe";
 import { useAbleReport } from "@/lib/useAbleReport";
@@ -609,7 +610,7 @@ export default function Overview() {
   return (
     <div className="space-y-3">
       <PageHeader
-        title="Dashboard"
+        title="Overview"
         subtitle={stats.at ? `Updated ${clock(stats.at)}` : undefined}
         actions={
           <Button variant="secondary" size="sm" onClick={refresh} disabled={busy}>
@@ -618,38 +619,21 @@ export default function Overview() {
         }
       />
 
-      {errors.map((e) => (
-        <div key={e} className="rounded-lg border border-app-red/30 bg-app-red/10 px-4 py-2.5 text-sm text-app-red-text">
-          {e}
-        </div>
-      ))}
+      {errors.length > 0 && <ReportError error={errors.join(" · ")} onRetry={refresh} stale={!!s} />}
 
       {/* ---- Headline numbers ---- */}
       {s && derived ? (
-        <div className={cn("app-stat-grid grid", fade)}>
+        <div className="space-y-4">
+          <div className={cn("app-headline-grid", fade)}>
           <FinCard label="Users" valueClass={STAT_NEUTRAL} note={`+${fmtInt(s.users.newLast7d)} in last 7 days`}>
             {fmtInt(s.users.total)}
-          </FinCard>
-          <FinCard label="Card provider accounts" valueClass={STAT_NEUTRAL} note={`${share(s.users.withCustomer, s.users.total)} of users`}>
-            {fmtInt(s.users.withCustomer)}
-          </FinCard>
-          <FinCard label="Users with a card" valueClass={STAT_NEUTRAL} note={`${share(s.users.withCard, s.users.total)} of users`}>
-            {fmtInt(s.users.withCard)}
-          </FinCard>
-          <FinCard label="Users with deposit address" valueClass={STAT_NEUTRAL} note={`${share(s.users.withDepositAddress, s.users.total)} of users`}>
-            {fmtInt(s.users.withDepositAddress)}
-          </FinCard>
-          <FinCard label="Wallet balances" valueClass={STAT_POSITIVE} note={`${fmtInt(s.balances.holders)} wallets above 0, excl. Interlace`}>
-            {fmt(s.balances.totalUsdt)}
-            <Unit>USDT</Unit>
           </FinCard>
           <FinCard label="Wallet deposits, all time" valueClass={STAT_POSITIVE} note={`${fmtInt(derived.dep.count)} deposits`}>
             {fmt(derived.dep.volumeUsdt)}
             <Unit>USDT</Unit>
           </FinCard>
-          <FinCard label="Withdrawals, all time" valueClass={STAT_NEGATIVE} note={`${fmtInt(derived.out.count)} to external addresses`}>
-            {fmt(derived.out.volumeUsdt)}
-            <Unit>USDT</Unit>
+          <FinCard label="Users with a card" valueClass={STAT_NEUTRAL} note={`${share(s.users.withCard, s.users.total)} of users`}>
+            {fmtInt(s.users.withCard)}
           </FinCard>
           <FinCard
             label="Net card spend, all time"
@@ -661,89 +645,29 @@ export default function Overview() {
           >
             {fmtUsd(s.cardSpend?.volumeUsd ?? 0, 2)}
           </FinCard>
+          </div>
+          <details className="app-disclosure"><summary>Balances &amp; account setup</summary><div className="app-stat-grid grid">
+          <FinCard label="Card provider accounts" valueClass={STAT_NEUTRAL} note={`${share(s.users.withCustomer, s.users.total)} of users`}>
+            {fmtInt(s.users.withCustomer)}
+          </FinCard>
+          <FinCard label="Users with deposit address" valueClass={STAT_NEUTRAL} note={`${share(s.users.withDepositAddress, s.users.total)} of users`}>
+            {fmtInt(s.users.withDepositAddress)}
+          </FinCard>
+          <FinCard label="Wallet balances" valueClass={STAT_POSITIVE} note={`${fmtInt(s.balances.holders)} wallets above 0, excl. Interlace`}>
+            {fmt(s.balances.totalUsdt)}
+            <Unit>USDT</Unit>
+          </FinCard>
+          <FinCard label="Withdrawals, all time" valueClass={STAT_NEGATIVE} note={`${fmtInt(derived.out.count)} to external addresses`}>
+            {fmt(derived.out.volumeUsdt)}
+            <Unit>USDT</Unit>
+          </FinCard>
+          </div></details>
         </div>
       ) : stats.error ? (
-        <Empty compact title="Stats are unavailable" description="Refresh to try again." />
+        null
       ) : (
-        <div className="flex items-center justify-center py-8 text-sm text-ink-muted">
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading stats…
-        </div>
+        <ReportLoading label="Loading overview" />
       )}
-
-      {/* ---- Services and latency ---- */}
-      <div className={GRID_2}>
-        <Card
-          title="Services"
-          actions={
-            <>
-              {latest && <span className="text-[11px] text-ink-faint">Checked {clock(latest.at)}</span>}
-              <Badge variant={overall.variant}>{overall.label}</Badge>
-            </>
-          }
-          bodyClassName="p-0"
-        >
-          {latest ? (
-            <ServicesTable services={services} uptime={uptime} />
-          ) : (
-            <div className="flex items-center justify-center py-6 text-sm text-ink-muted">
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Checking services…
-            </div>
-          )}
-          <p className="border-t border-white/[0.06] px-3 py-1.5 text-[11px] text-ink-faint">
-            Latency and uptime cover this tab&apos;s checks since it opened. Immersve shows the shared upstream probe;
-            Sumsub is timed by the API.
-          </p>
-        </Card>
-
-        <Card title="Round-trip latency per check, this session (ms)" className="chart-card">
-          {latency.length > 0 ? (
-            <ResponsiveContainer width="100%" height={CHART_H}>
-              <LineChart data={latency}>
-                <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
-                <XAxis
-                  dataKey="t"
-                  type="number"
-                  scale="time"
-                  domain={["dataMin", "dataMax"]}
-                  tickFormatter={(t: number) => clock(t)}
-                  minTickGap={40}
-                  {...axisProps}
-                />
-                <YAxis width={40} allowDecimals={false} {...axisProps} />
-                <Tooltip
-                  {...TOOLTIP_STYLE}
-                  cursor={LINE_CURSOR}
-                  labelFormatter={(t: number) => clock(t)}
-                  formatter={(v: number, name: string) => [`${fmt(v, 0)} ms`, name]}
-                />
-                <Legend wrapperStyle={{ fontSize: 11 }} iconType="plainline" align="right" verticalAlign="top" height={20} />
-                <Line
-                  name="API /health"
-                  type="monotone"
-                  dataKey="api"
-                  stroke={ACCENT}
-                  strokeWidth={2}
-                  dot={latency.length < 3 ? { r: 3 } : false}
-                  connectNulls
-                  isAnimationActive={false}
-                />
-                <Line
-                  name="Upstream probe, all providers"
-                  type="monotone"
-                  dataKey="upstream"
-                  stroke={SERIES[0]}
-                  strokeWidth={2}
-                  dot={latency.length < 3 ? { r: 3 } : false}
-                  connectNulls
-                  isAnimationActive={false}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          ) : (
-            <ChartEmpty height={CHART_H} title="Waiting for the first check" />
-          )}
-        </Card>
-      </div>
 
       {s && derived && (
         <div className={cn("space-y-3", fade)}>
@@ -936,6 +860,84 @@ export default function Overview() {
           </div>
         </div>
       )}
+      <details className="app-disclosure"><summary>Service health &amp; technical details <Badge variant={overall.variant}>{overall.label}</Badge></summary>
+      {/* ---- Services and latency ---- */}
+      <div className={GRID_2}>
+        <Card
+          title="Services"
+          actions={
+            <>
+              {latest && <span className="text-[11px] text-ink-faint">Checked {clock(latest.at)}</span>}
+              <Badge variant={overall.variant}>{overall.label}</Badge>
+            </>
+          }
+          bodyClassName="p-0"
+        >
+          {latest ? (
+            <ServicesTable services={services} uptime={uptime} />
+          ) : (
+            <div className="flex items-center justify-center py-6 text-sm text-ink-muted">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Checking services…
+            </div>
+          )}
+          <p className="border-t border-white/[0.06] px-3 py-1.5 text-[11px] text-ink-faint">
+            Latency and uptime cover this tab&apos;s checks since it opened. Immersve shows the shared upstream probe;
+            Sumsub is timed by the API.
+          </p>
+        </Card>
+
+        <Card title="Round-trip latency per check, this session (ms)" className="chart-card">
+          {latency.length > 0 ? (
+            <ResponsiveContainer width="100%" height={CHART_H}>
+              <LineChart data={latency}>
+                <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
+                <XAxis
+                  dataKey="t"
+                  type="number"
+                  scale="time"
+                  domain={["dataMin", "dataMax"]}
+                  tickFormatter={(t: number) => clock(t)}
+                  minTickGap={40}
+                  {...axisProps}
+                />
+                <YAxis width={40} allowDecimals={false} {...axisProps} />
+                <Tooltip
+                  {...TOOLTIP_STYLE}
+                  cursor={LINE_CURSOR}
+                  labelFormatter={(t: number) => clock(t)}
+                  formatter={(v: number, name: string) => [`${fmt(v, 0)} ms`, name]}
+                />
+                <Legend wrapperStyle={{ fontSize: 11 }} iconType="plainline" align="right" verticalAlign="top" height={20} />
+                <Line
+                  name="API /health"
+                  type="monotone"
+                  dataKey="api"
+                  stroke={ACCENT}
+                  strokeWidth={2}
+                  dot={latency.length < 3 ? { r: 3 } : false}
+                  connectNulls
+                  isAnimationActive={false}
+                />
+                <Line
+                  name="Upstream probe, all providers"
+                  type="monotone"
+                  dataKey="upstream"
+                  strokeDasharray="6 4"
+                  stroke={SERIES[0]}
+                  strokeWidth={2}
+                  dot={latency.length < 3 ? { r: 3 } : false}
+                  connectNulls
+                  isAnimationActive={false}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <ChartEmpty height={CHART_H} title="Waiting for the first check" />
+          )}
+        </Card>
+      </div>
+
+      </details>
     </div>
   );
 }

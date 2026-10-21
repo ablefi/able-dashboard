@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { ReportError, ReportLoading } from "@/components/ui/ReportState";
 import Link from "next/link";
 import { Loader2, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import PageHeader from "@/components/ui/PageHeader";
@@ -192,7 +194,8 @@ function buildColumns(opts: {
       cell: (c) => <RowMenu actions={actions(c)} label={`Actions for ${c.name}`} />,
     });
   }
-  return cols;
+  const essentials = new Set(["creator", "status", "fee", "signups", "views", "costPerSignup", "cpm", "actions"]);
+  return cols.map((col) => ({ ...col, defaultHidden: !essentials.has(col.key) }));
 }
 
 function scrapingNote(scraping: CreatorsReport["scraping"]): string {
@@ -202,6 +205,9 @@ function scrapingNote(scraping: CreatorsReport["scraping"]): string {
 }
 
 export default function Creators() {
+  const router = useRouter();
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState("");
   const { data, at, error, loading, refresh } = useAbleReport<CreatorsReport>(CREATORS_PATH, { refreshMs: CREATORS_REFRESH_MS });
   const canEdit = useAuth().can("creators:write");
   const editor = useCreatorEditor({ report: data, refresh });
@@ -226,6 +232,8 @@ export default function Creators() {
   );
   const prefs = useTablePrefs("able-creators", columns);
   const creators = useMemo(() => data?.creators ?? [], [data]);
+  const filtered = useMemo(() => creators.filter((c) => (!status || c.status === status) && [c.name, ...c.codes, ...creatorHandles(c).map((h) => h.handle)].join(" ").toLowerCase().includes(query.trim().toLowerCase())), [creators, query, status]);
+  const statuses = useMemo(() => [...new Set(creators.map((c) => c.status))].sort(), [creators]);
   const t = data?.totals;
   const allBusy = feedBusy.has("*");
 
@@ -259,26 +267,22 @@ export default function Creators() {
         }
       />
 
-      {error && <div className="rounded-lg border border-app-red/30 bg-app-red/10 px-3 py-2 text-sm text-app-red-text">{error}</div>}
+      {error && <ReportError error={error} onRetry={() => void refresh()} stale={!!data} />}
 
       {!data || !t ? (
         loading || !error ? (
-          <div className="flex items-center justify-center py-24 text-ink-muted">
-            <Loader2 className="mr-2 h-6 w-6 animate-spin" /> Loading creators…
-          </div>
+          <ReportLoading label="Loading creators" />
         ) : null
       ) : (
         <div className={cn("space-y-3 transition-opacity", loading && "opacity-60")}>
+          <div className="app-headline-grid">
+            <FinCard label="Creators" valueClass={STAT_NEUTRAL} note={`${fmtInt(t.active)} active`}>{fmtInt(t.creators)}</FinCard>
+            <FinCard label="Fees committed" valueClass={STAT_NEUTRAL}>{usd2(t.feeUsd)}</FinCard>
+            <FinCard label="Signups" valueClass={STAT_NEUTRAL}>{fmtInt(t.signups)}</FinCard>
+            <FinCard label="Counted views" valueClass={STAT_NEUTRAL}>{fmtInt(t.countedViews)}</FinCard>
+          </div>
+          <details className="app-disclosure"><summary>More performance metrics &amp; feed status</summary>
           <div className="app-stat-grid grid">
-            <FinCard label="Creators" valueClass={STAT_NEUTRAL} note={`${fmtInt(t.active)} active`}>
-              {fmtInt(t.creators)}
-            </FinCard>
-            <FinCard label="Fees committed" valueClass={STAT_NEGATIVE} note="USD, every deal on the roster">
-              {usd2(t.feeUsd)}
-            </FinCard>
-            <FinCard label="Signups" valueClass={STAT_NEUTRAL} note="Typed a creator's invite code">
-              {fmtInt(t.signups)}
-            </FinCard>
             <FinCard label="Users with a card" valueClass={STAT_NEUTRAL} note="Of those signups">
               {fmtInt(t.carded)}
             </FinCard>
@@ -294,9 +298,6 @@ export default function Creators() {
             <FinCard label="Cost per card" valueClass={STAT_NEUTRAL} note="USD fees per user with a card">
               {usd2(t.costPerCardUsd)}
             </FinCard>
-            <FinCard label="Counted views" valueClass={STAT_NEUTRAL} note={`${fmtInt(t.countedPosts)} counted posts, last 90 days`}>
-              {fmtInt(t.countedViews)}
-            </FinCard>
             <FinCard label="CPM" valueClass={STAT_NEUTRAL} note="USD fees per 1,000 counted views">
               {usd2(t.cpmUsd)}
             </FinCard>
@@ -308,16 +309,24 @@ export default function Creators() {
             </FinCard>
           </div>
 
+
+          </details>
           <Card
-            title={`Roster (${fmtInt(creators.length)})`}
+            title={`Creator roster (${fmtInt(filtered.length)})`}
             actions={<ColumnsButton columns={columns} hidden={prefs.hidden} toggleHidden={prefs.toggleHidden} />}
             bodyClassName="p-0"
           >
-            {creators.length ? (
+            <div className="app-toolbar" role="search" aria-label="Filter creators">
+              <input type="search" aria-label="Search creators" placeholder="Search name, handle or code" value={query} onChange={(e) => setQuery(e.target.value)} />
+              <select aria-label="Creator status" value={status} onChange={(e) => setStatus(e.target.value)}><option value="">All statuses</option>{statuses.map((s) => <option key={s} value={s}>{s}</option>)}</select>
+              {(query || status) && <Button size="sm" variant="ghost" onClick={() => { setQuery(""); setStatus(""); }}>Clear filters</Button>}
+            </div>
+            {filtered.length ? (
               <DataTable
                 className="max-h-[32rem]"
                 columns={columns}
-                rows={creators}
+                rows={filtered}
+                onRowClick={(c) => router.push(`/creators/${encodeURIComponent(c.id)}`)}
                 rowKey={(c) => c.id}
                 hidden={prefs.hidden}
                 widths={prefs.widths}
@@ -326,9 +335,11 @@ export default function Creators() {
             ) : (
               <Empty
                 compact
-                title="No creators yet"
+                title={creators.length ? "No creators match your filters" : "No creators yet"}
                 action={
-                  canEdit ? (
+                  creators.length ? (
+                    <Button size="sm" variant="secondary" onClick={() => { setQuery(""); setStatus(""); }}>Clear filters</Button>
+                  ) : canEdit ? (
                     <Button size="sm" onClick={editor.openAdd}>
                       <Plus className="h-3.5 w-3.5" /> Add creator
                     </Button>

@@ -11,6 +11,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <button
         ref={ref}
+        data-variant={variant}
         className={cn(
           // `active:scale-[0.97]` is what makes a press feel like a press —
           // without it the only feedback is a colour change, which reads as

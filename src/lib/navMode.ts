@@ -18,8 +18,8 @@ export const NAV_MODES: { value: NavMode; label: string; hint: string }[] = [
   { value: "top", label: "Top bar", hint: "Sections across the top, pages on a second row. Full width." },
 ];
 
-export const DEFAULT_NAV_MODE: NavMode = "sidebar";
-export const NAV_MODE_KEY = "app-nav-mode-v1";
+export const DEFAULT_NAV_MODE: NavMode = "bottom";
+export const NAV_MODE_KEY = "able-nav-mode-v2";
 
 export function readNavMode(): NavMode {
   if (typeof window === "undefined") return DEFAULT_NAV_MODE;

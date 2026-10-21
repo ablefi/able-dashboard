@@ -25,7 +25,7 @@ export const PRESENTATIONS: { value: Presentation; label: string; hint: string }
   // Not a colourway. It repaints the surfaces with the app's own values AND
   // restyles the primitives — the onboarding gradient and starfield, the glass
   // stroke, the app's radii and the glow on the accent.
-  { value: "brand", label: "Brand", hint: "The app's look: starfield background, glass cards, the brand blue glow." },
+  { value: "brand", label: "Able", hint: "White canvas, black controls and a floating monochrome tab bar." },
 ];
 
 export const DEFAULT_PRESENTATION: Presentation = "brand";
@@ -34,7 +34,7 @@ export const DEFAULT_PRESENTATION: Presentation = "brand";
 // the key is bumped to move everyone onto the new default. That does discard a
 // deliberate choice of Classic, which is the intent: this is the look now, not
 // one of three.
-export const PRESENTATION_KEY = "app-presentation-v3";
+export const PRESENTATION_KEY = "able-presentation-v4";
 
 export function readPresentation(): Presentation {
   if (typeof window === "undefined") return DEFAULT_PRESENTATION;
