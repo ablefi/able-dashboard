@@ -5,7 +5,6 @@ import Link from "next/link";
 import Image from "next/image";
 import { BRAND } from "@/lib/brand";
 import StagingBadge from "@/components/StagingBadge";
-import ChangePasswordButton from "@/components/ChangePasswordButton";
 import { canSeeSection, hasPermission, type AdminSession } from "@/lib/permissions";
 import { useAuth } from "@/context/AuthContext";
 import { usePathname } from "next/navigation";
@@ -231,7 +230,6 @@ export default function Sidebar({
       {/* Footer: change own password, Admins (needs admins:read), collapse */}
       <div className="space-y-1 border-t border-white/[0.06] p-3">
         {/* Shared-password sessions (id "local:<email>") have no backend account to change. */}
-        {!admin?.id.startsWith("local:") && <ChangePasswordButton collapsed={collapsed} />}
         {hasPermission(admin, "admins:read") && (
           <Link
             href="/admins"

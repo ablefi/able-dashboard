@@ -29,14 +29,62 @@ Creators and posts live in Able's API, which scrapes every creator's feed every 
 
 ## Sign-in
 
-- **Shared password (current).** Set `DASHBOARD_PASSWORD` (and optionally `DASHBOARD_ALLOWED_EMAILS`). The login form checks it on the dashboard's server. Sessions get `LOCAL_PERMISSIONS` from `src/lib/auth.ts`: every Able API report plus Website and Competitors. Accounts, Referral Codes, Admins and App Store Reviews stay hidden.
-- **Backend admin accounts (later).** Remove `DASHBOARD_PASSWORD` and the form forwards to `POST /admin/login` on Able's backend, which returns each admin's own token and permission keys. Shared-password sessions stop working as soon as the variable is removed. The backend would need:
-  - `POST /admin/login` → `{ access_token, admin: { id, email, isSuperAdmin, permissions[] } }`
-  - `GET /admin/users` (paged), `GET /admin/users/:id`, `PATCH /admin/users/:id/toggle-status`, `DELETE /admin/users/:id`, `POST /admin/users/:id/restore`
-  - `GET/POST/PATCH/DELETE /admin/referral-codes[/:id]` and their analytics
-  - `GET/POST/PATCH/DELETE /admin/admins[/:id]`, `GET/POST/DELETE /admin/permissions[/:id]`
+Google Workspace is the only login method. The server verifies Google's ID-token signature,
+issuer, audience, expiry, nonce, verified email and hosted-domain claim. Both the email's
+exact domain and Google's hosted domain must be `able.finance`. Personal Google accounts,
+external domains and domain lookalikes are refused. The `hd` parameter on the Google
+screen is only a hint; it is not the access control.
 
-Either way the session is a signed httpOnly cookie (`DASHBOARD_SESSION_SECRET`) and every API route checks it with `requireSession`.
+The authorization-code flow uses a signed, ten-minute, HttpOnly state cookie, a nonce and
+PKCE. Tokens are exchanged server-side. The session contains the Google subject and email,
+never Google access tokens or Able API credentials. Production cookies are Secure,
+HttpOnly, SameSite=Lax and host-only (`__Host-` prefix). Sessions expire eight hours after
+sign-in; heartbeats do not extend them. Protected pages check the session server-side and
+every data API checks it independently. Mutating requests also require the exact dashboard
+Origin. Password login, backend-admin login and all old `app_session` cookies are rejected,
+even if their old environment variables are still set. Missing configuration fails closed.
+
+### Configure Google and Vercel before deploying
+
+1. In the Able Google Cloud organization, configure Google Auth Platform for an **Internal**
+   audience and create a **Web application** OAuth client. Only `openid email` scopes are used.
+2. Register the exact redirect URI: `https://YOUR-DASHBOARD-HOST/api/auth/google/callback`.
+   For local development, separately register `http://localhost:3011/api/auth/google/callback`.
+3. Set `DASHBOARD_URL` to the canonical origin (no path), `GOOGLE_CLIENT_ID`,
+   `GOOGLE_CLIENT_SECRET`, and a strong `DASHBOARD_SESSION_SECRET` (for example,
+   `openssl rand -base64 32`) in the Vercel project's environment. None is `NEXT_PUBLIC_`.
+   Keep the existing scoped `API_TOKEN`, `CREATORS_API_TOKEN` and Supabase configuration.
+4. Remove `DASHBOARD_PASSWORD` and unused `ADMIN_BACKEND_*` credentials. They no longer
+   enable login. Optionally set `DASHBOARD_ALLOWED_EMAILS` to a comma-separated subset of
+   staff emails; the allowlist is checked on every request, including existing sessions.
+5. Redeploy, then verify an Able account can open a report and an outside account cannot.
+   Old sessions must return to login; unauthenticated data API requests must return 401.
+
+For previews, use a separate OAuth client, session secret, callback URI and canonical
+`DASHBOARD_URL`. Unconfigured previews intentionally cannot sign in. HTTP is accepted
+only for localhost outside production. Do not point a preview's configuration at production.
+
+All staff get the former local login's scoped permissions, including creator editing;
+backend admin pages and full admin credentials remain unavailable. Google Workspace MFA
+and account lifecycle policies should be managed in the organization's Google admin console.
+Disabling a Google account prevents new logins but does not immediately invalidate an
+already issued dashboard cookie (maximum eight hours). To revoke existing access promptly,
+set a narrower `DASHBOARD_ALLOWED_EMAILS` list and redeploy, or rotate the session secret
+and redeploy to sign everyone out.
+
+References: [Google token validation](https://developers.google.com/identity/gsi/web/guides/verify-google-id-token)
+and [Google OpenID Connect](https://developers.google.com/identity/openid-connect/openid-connect).
+
+### Authentication checks
+
+`npm test` exercises signed Google tokens, the complete callback with a mocked Google
+exchange/JWKS endpoint, session expiry, legacy-login rejection, CSRF and every data route's
+unauthenticated boundary. It needs no credentials or network. `npm run typecheck:auth`
+checks the auth code, API routes and affected UI. The existing full `npm run typecheck`
+currently reports unrelated Recharts formatter errors; the build already skips those checks.
+`npm run test:smoke` checks the production build over HTTP using disposable credentials
+and no upstream services. The Authentication workflow runs the focused typecheck, tests,
+Next.js build and HTTP smoke checks on PRs.
 
 ### Permissions
 

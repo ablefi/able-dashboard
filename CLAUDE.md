@@ -30,11 +30,14 @@ lucide-react.
 - No scraping or crons here: Able's API scrapes creators on Railway.
 
 ## Auth
-- `DASHBOARD_PASSWORD` set: shared-password sign-in, checked server-side.
-  Sessions carry no backend token and get `LOCAL_PERMISSIONS` from code.
-- Unset: the form forwards to the backend's `POST /admin/login` (not built yet).
-- Every API route guards with `requireSession(req, sectionOrKey)`; that is the
-  boundary for the Able proxy and Supabase routes. Nav filtering is UX only.
+- Google Workspace is the only sign-in method. Verify the Google signature, issuer,
+  audience, expiry, nonce, verified email and exact hosted domain `able.finance`.
+- Do not restore shared-password or backend-admin login or accept old session formats.
+- `src/lib/google-auth.ts` owns OIDC, PKCE/state and signed eight-hour sessions.
+- `src/lib/auth.ts` owns server session/permission guards and write Origin checks.
+- Every data API route must call `requireSession(req, sectionOrKey)`. Client nav is UX only.
+- `STAFF_PERMISSIONS` preserves the former local login's scoped access; no backend token
+  reaches the browser. See README for Google/Vercel deployment configuration.
 
 ## Boundaries
 - The read proxy (`/api/able`) is an exact read-only allowlist. Never add write

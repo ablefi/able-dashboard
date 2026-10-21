@@ -7,9 +7,8 @@ import type { NextConfig } from "next";
 /**
  * Security headers.
  *
- * Added 2026-09-01 after the mass-deletion incident. The dashboard hands the
- * signed-in admin's backend JWT to the browser and keeps it in localStorage,
- * so any script running on this origin can read it. These headers narrow that.
+ * Defence in depth for the dashboard. Google sessions use HttpOnly cookies;
+ * backend and Google credentials are never sent to browser scripts.
  *
  * Deliberately split in two:
  *
@@ -17,8 +16,7 @@ import type { NextConfig } from "next";
  *    X-Frame-Options only stop OTHER sites embedding us; nosniff and
  *    Referrer-Policy don't gate any request the page makes.
  *
- *  - The real prize is `connect-src`, which stops a hostile script POSTing the
- *    token to an attacker's server. That one CAN break things if a host is
+ *  - `connect-src` can limit data exfiltration. It CAN break things if a host is
  *    missed, so it ships as Report-Only first: the browser logs violations to
  *    the console and blocks nothing. Once the console is clean during normal
  *    use, move this list into an enforced Content-Security-Policy header.
@@ -47,6 +45,7 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     return [
+      { source: "/api/:path*", headers: [{ key: "Cache-Control", value: "no-store" }] },
       {
         source: "/:path*",
         headers: [
