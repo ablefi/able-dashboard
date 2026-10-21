@@ -3,45 +3,21 @@
 import React, { useEffect, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { toast } from "react-toastify";
-import { Loader2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import Button from "@/components/ui/Button";
 import { DEFAULT_PRESENTATION, readPresentation, type Presentation } from "@/lib/presentation";
 import { applyFont, readFont } from "@/lib/fonts";
 import { BRAND } from "@/lib/brand";
 
-const inputCls =
-  "w-full rounded-lg border border-white/[0.08] bg-app-navy-light/60 px-3 py-2.5 text-sm text-ink placeholder:text-ink-faint focus:border-app-blue/45 focus:outline-none";
-
-/**
- * Sign in with your own backend admin account.
- *
- * These are real per-person credentials checked by the backend, which then
- * says what you may do. This replaced a flow where everyone authenticated
- * locally and was handed one shared admin token, so the
- * backend could not tell operators apart and each held full super-admin.
- */
 const Login: React.FC = () => {
-  const { login, loading, user } = useAuth();
+  const { user } = useAuth();
   const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [failed, setFailed] = useState(false);
+  useEffect(() => { setFailed(new URLSearchParams(window.location.search).has("error")); }, []);
 
   useEffect(() => {
     if (user) router.replace("/");
   }, [user, router]);
-
-  const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await login(email, password);
-      toast.success("Welcome back!");
-      router.replace("/");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Login failed. Please try again.");
-    }
-  };
 
   /**
    * The sign-in screen sits outside the authed shell, so it never picked up
@@ -68,35 +44,13 @@ const Login: React.FC = () => {
             <div className="text-xs text-ink-faint">Sign in to continue</div>
           </div>
         </div>
-        <form onSubmit={onSubmit} className="space-y-4">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-ink-muted">Email</label>
-            <input
-              className={inputCls}
-              type="email"
-              autoComplete="username"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoFocus
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-ink-muted">Password</label>
-            <input
-              className={inputCls}
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
-          <Button type="submit" size="lg" className="w-full" disabled={loading}>
-            {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-            {loading ? "Signing in…" : "Login"}
+        <div className="space-y-4">
+          <p className="text-center text-sm text-ink-muted">Use your @able.finance Google Workspace account.</p>
+          {failed && <p role="alert" className="text-sm text-ink-muted">Sign-in was unsuccessful. Choose your Able Google account and try again. If it still fails, contact your dashboard administrator.</p>}
+          <Button type="button" size="lg" className="w-full" onClick={() => window.location.assign("/api/auth/google")}>
+            Sign in with Google
           </Button>
-        </form>
+        </div>
       </div>
     </div>
   );

@@ -8,6 +8,7 @@
     "clsx": "^2.1.1",
     "d3-geo": "^3.1.1",
     "dayjs": "^1.11.21",
+    "jose": "^6.2.13",
     "lucide-react": "^0.460.0",
     "next": "^16.2.6",
     "react": "^19.1.0",
@@ -15,6 +16,7 @@
     "react-dom": "^19.1.0",
     "react-toastify": "^11.0.5",
     "recharts": "^3.1.0",
+    "server-only": "^0.0.1",
     "tailwind-merge": "^2.5.4"
   },
   "devDependencies": {
@@ -24,12 +26,17 @@
     "@types/react": "^19.1.6",
     "@types/react-dom": "^19.1.6",
     "tailwindcss": "^4.1.5",
+    "tsx": "^4.23.15",
     "typescript": "^5.6.3"
   },
   "scripts": {
     "dev": "next dev -p 3011",
     "build": "next build",
     "start": "next start -p 3011",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "node --conditions=react-server --import tsx --test test/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "typecheck:auth": "tsc -p tsconfig.auth.json",
+    "test:smoke": "node test/auth-smoke.mjs"
   }
 }

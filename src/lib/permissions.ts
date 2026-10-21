@@ -1,15 +1,9 @@
 /**
- * Admin permissions — the backend is the source of truth.
- *
- * Every operator now signs in as their own backend admin and carries a
- * `permissions[]` list. The backend enforces it (403 on a missing key), so
- * everything here is UI gating only: its job is to make the interface match
- * what the API will actually allow, not to be the security boundary. Never
- * treat a check here as protection — the backend check is the real one.
- *
- * `isSuperAdmin` is deliberately NOT a bypass. The backend does not skip
- * permission checks for a super admin (the seeded one simply holds every
- * key), so neither do we. It only unlocks "set another admin's password".
+ * Permission vocabulary shared by the server guard and client navigation.
+ * Google Workspace sessions receive STAFF_PERMISSIONS from lib/auth.ts on
+ * every request. Backend-admin keys remain here for the template pages but
+ * are not granted to staff sessions. Client checks are only navigation UX;
+ * requireSession is the security boundary for the dashboard's data routes.
  */
 
 export interface AdminSession {

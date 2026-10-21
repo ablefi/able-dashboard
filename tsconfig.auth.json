@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "incremental": false },
+  "include": [
+    "src/lib/google-auth.ts", "src/lib/auth.ts", "src/app/api/**/*.ts",
+    "src/app/(authed)/layout.tsx", "src/context/AuthContext.tsx", "src/views/Login.tsx",
+    "test/**/*.ts"
+  ],
+  "exclude": ["node_modules"]
+}
